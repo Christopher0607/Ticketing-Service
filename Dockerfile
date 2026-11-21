@@ -6,18 +6,16 @@ RUN --mount=type=secret,id=npm_ca \
     if [ -f /run/secrets/npm_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm_ca; fi \
     && npm ci
 COPY . .
-RUN npm run build && npm prune --omit=dev --offline
+RUN SETLIST_DOCKER_BUILD=1 npm run build \
+    && mkdir -p .next/standalone/.next .next/standalone/scripts \
+    && cp -r .next/static .next/standalone/.next/static \
+    && cp -r public db .next/standalone/ \
+    && cp scripts/database.mjs .next/standalone/scripts/
 
 FROM node:24-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
-COPY --from=build /app/package*.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/.next ./.next
-COPY --from=build /app/next.config.ts ./next.config.ts
-COPY --from=build /app/public ./public
-COPY --from=build /app/db ./db
-COPY --from=build /app/scripts/database.mjs ./scripts/database.mjs
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0
+COPY --from=build --chown=node:node /app/.next/standalone ./
 USER node
 EXPOSE 3000
-CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]
+CMD ["node", "server.js"]
