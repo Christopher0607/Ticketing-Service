@@ -1,0 +1,53 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  marketplace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ticketing
+          POSTGRES_PASSWORD: ticketing
+          POSTGRES_DB: ticketing
+        ports:
+          - 5442:5432
+        options: >-
+          --health-cmd "pg_isready -U ticketing -d ticketing"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ticketing:ticketing@127.0.0.1:5442/ticketing
+      APP_URL: http://localhost:3000
+      PAYMENT_MODE: demo
+      JOB_SECRET: local-demo-reconcile
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run db:migrate && npm run db:seed
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          npm run start > /tmp/setlist-ci.log 2>&1 &
+          trap 'kill $!' EXIT
+          curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3000/ -o /dev/null
+          npm run test:e2e
+      - name: Verify signed Stripe events with local fixtures
+        env:
+          APP_URL: http://localhost:3001
+          PAYMENT_MODE: stripe
+          STRIPE_SECRET_KEY: sk_test_fixture
+          STRIPE_WEBHOOK_SECRET: whsec_local_fixture
+        run: |
+          npm run start -- --port 3001 > /tmp/setlist-stripe-ci.log 2>&1 &
+          trap 'kill $!' EXIT
+          curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3001/ -o /dev/null
+          npm run test:webhook

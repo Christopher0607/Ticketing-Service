@@ -1,0 +1,40 @@
+{
+  "name": "ticketing-service",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/database.mjs migrate",
+    "db:seed": "node --env-file-if-exists=.env.local scripts/database.mjs seed",
+    "db:admin": "node --env-file-if-exists=.env.local scripts/database.mjs admin",
+    "db:local": "node scripts/local-db.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:webhook": "node --test tests/stripe.integration.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^1.77.0",
+    "next": "^16.4.6",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sharp": "^0.35.5",
+    "stripe": "^20.4.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "embedded-postgres": "^18.7.0-beta.19",
+    "typescript": "^7.0.2"
+  }
+}
