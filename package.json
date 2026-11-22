@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/bundle-migrations.mjs",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
@@ -29,6 +30,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.16.8",
     "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",

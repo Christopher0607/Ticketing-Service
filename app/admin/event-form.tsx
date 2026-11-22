@@ -1,8 +1,8 @@
 import { categories, mediaUrl, posterUrl } from "@/lib/format";
 import type { Translate } from "@/lib/i18n";
 import type { Event } from "@/lib/market";
-import { ImageField } from "../client";
-import { categoryLabel } from "../ui";
+import { ImageField } from "@/app/client";
+import { categoryLabel } from "@/app/ui";
 
 type Defaults = Pick<Event, "id" | "title" | "category" | "venue" | "city" | "starts_at" | "description" | "transfer_policy_url" | "transfer_host"
   | "featured" | "image" | "poster_id" | "seatmap_id" | "venue_address" | "poster_remote" | "seatmap_remote">;

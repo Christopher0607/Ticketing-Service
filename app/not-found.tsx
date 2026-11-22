@@ -4,5 +4,8 @@ import { Empty } from "./ui";
 
 export default async function NotFound() {
   const { t } = await i18n();
-  return <div className="shell page"><Empty title={t("empty.notFound")}><Link href="/events" className="button primary">{t("account.explore")}</Link></Empty></div>;
+  return <main id="content" className="shell page standalone-page">
+    <Link href="/" className="standalone-logo"><img src="/logo.png" alt="Crazy Monkey" width={72} height={72} /></Link>
+    <Empty title={t("empty.notFound")}><Link href="/events" className="button primary">{t("account.explore")}</Link></Empty>
+  </main>;
 }

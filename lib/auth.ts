@@ -63,3 +63,18 @@ export async function requireUser(path = "/account", role?: User["role"]) {
   if (role && user.role !== role) redirect(path === "/sell" ? "/account?notice=seller-access" : "/account");
   return user;
 }
+
+/** Admin console guard: anyone who isn't a signed-in administrator goes to the admin login. */
+export async function requireAdmin(path = "/admin") {
+  const user = await currentUser();
+  if (!user || user.role !== "admin") redirect(`/admin/login${path !== "/admin" ? `?next=${encodeURIComponent(path)}` : ""}`);
+  return user;
+}
+
+/** Seller centre guard: signed-out visitors sign in first; buyers see the seller landing page. */
+export async function requireSeller(path = "/sell") {
+  const user = await currentUser();
+  if (!user) redirect(`/account?next=${encodeURIComponent(path)}`);
+  if (user.role !== "seller") redirect("/sell");
+  return user;
+}

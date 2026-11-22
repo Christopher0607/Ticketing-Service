@@ -1,9 +1,9 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { authAllowed, clearSession, createSession, passwordHash, passwordMatches, requireUser } from "@/lib/auth";
+import { authAllowed, clearSession, createSession, passwordHash, passwordMatches, requireAdmin, requireSeller, requireUser } from "@/lib/auth";
 import { appUrl, paymentMode } from "@/lib/config";
 import { query, tx } from "@/lib/db";
 import { consumeAccountLink, mailConfigured, sendAccountLink } from "@/lib/identity";
@@ -39,7 +39,7 @@ function scaled(form: FormData, key: string, min: number, max: number, decimals 
   return number;
 }
 function safeNext(value: string) {
-  return /^\/(account|sell|admin|events\/[a-z0-9-]+|orders\/[a-f0-9-]+)$/.test(value) ? value : "/account";
+  return /^\/(account|sell(\/(new|listings|orders|payouts))?|admin(\/[a-z0-9/-]+)?|events\/[a-z0-9-]+|orders\/[a-f0-9-]+)$/.test(value) ? value : "/account";
 }
 function httpsUrl(value: string) {
   if (value.length > 1500) throw new ActionError("err.urlLong");
@@ -70,6 +70,13 @@ async function attempt<T>(path: string, operation: () => Promise<T>): Promise<T>
   }
 }
 const emailSchema = z.email().max(254);
+
+/** SETUP_TOKEN must be at least 24 characters; compared in constant time. */
+function setupTokenValid(token: string) {
+  const expected = process.env.SETUP_TOKEN ?? "";
+  if (expected.length < 24 || token.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+}
 const dummyHash = passwordHash(randomBytes(32).toString("hex"));
 
 export async function signIn(form: FormData) {
@@ -99,18 +106,18 @@ export async function signUp(form: FormData) {
     if (password.length < 12 || password.length > 128) throw new ActionError("err.passwordLength");
     if (field(form, "agree") !== "on") throw new ActionError("err.agree");
     if (!(await authAllowed(email))) throw new ActionError("err.tooMany");
-    const demo = paymentMode() === "demo";
-    if (!demo && !mailConfigured()) throw new ActionError("err.registration");
+    // Without an email service (e.g. before a domain is verified with Resend), accounts start verified.
+    const verified = paymentMode() === "demo" || !mailConfigured();
     const [user] = await query<{ id: string }>(`INSERT INTO users (name,email,password_hash,email_verified,terms_accepted_at)
-      VALUES ($1,$2,$3,$4,now()) ON CONFLICT (email) DO NOTHING RETURNING id`, [name, email, passwordHash(password), demo]);
+      VALUES ($1,$2,$3,$4,now()) ON CONFLICT (email) DO NOTHING RETURNING id`, [name, email, passwordHash(password), verified]);
     if (!user) throw new ActionError("err.accountExists");
     await createSession(user.id);
-    if (!demo) {
+    if (!verified) {
       try { await sendAccountLink({ id: user.id, email }, "verify"); }
       catch (error) { console.error("Verification email could not be sent", error instanceof Error ? error.message : error); }
     }
   });
-  redirect(paymentMode() === "demo" ? next : "/account");
+  redirect(paymentMode() === "demo" || !mailConfigured() ? next : "/account");
 }
 
 export async function signOut() {
@@ -124,28 +131,29 @@ export async function requestSelling(form: FormData) {
     if (!user.email_verified) throw new ActionError("err.verifyFirst");
     await query("UPDATE users SET seller_requested=true,phone=$2 WHERE id=$1 AND role='buyer'", [user.id, phone(form)]);
   });
-  await notify.admin("新的卖家申请 / New seller application", "/admin", `${user.name} · ${user.email}`);
+  await notify.admin("新的卖家申请 / New seller application", "/admin/users", `${user.name} · ${user.email}`);
   message("/account", "success", "ok.sellerApplied");
 }
 
 export async function approveSeller(form: FormData) {
-  await requireUser("/admin", "admin");
-  await attempt("/admin", async () => {
+  await requireAdmin();
+  const back = field(form, "back") === "/admin/users" ? "/admin/users" : "/admin";
+  await attempt(back, async () => {
     const [updated] = await query("UPDATE users SET role='seller',seller_requested=false WHERE id=$1 AND role='buyer' AND seller_requested RETURNING id", [id(form)]);
     if (!updated) throw new ActionError("err.applicationClosed");
   });
-  message("/admin", "success", "ok.sellerApproved");
+  message(back, "success", "ok.sellerApproved");
 }
 
 export async function savePayout(form: FormData) {
-  const user = await requireUser("/sell", "seller");
-  await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/payouts");
+  await attempt("/sell/payouts", async () => {
     const bank = text(form, "bank", 2, 60);
     const name = text(form, "holder", 2, 80);
     const account = text(form, "account", 4, 40);
     await query("UPDATE users SET payout_bank=$2,payout_name=$3,payout_account=$4 WHERE id=$1", [user.id, bank, name, account]);
   });
-  message("/sell", "success", "ok.payoutSaved");
+  message("/sell/payouts", "success", "ok.payoutSaved");
 }
 
 export async function startCheckout(form: FormData) {
@@ -192,14 +200,14 @@ export async function uploadReceipt(form: FormData) {
     }
   });
   if (!accepted) message(path, "error", "err.reservationExpired");
-  await notify.admin("新付款待核对 / Payment to verify", path, user.email);
+  await notify.admin("新付款待核对 / Payment to verify", `/admin${path}`, user.email);
   message(path, "success", "ok.receiptUploaded");
 }
 
 export async function verifyPayment(form: FormData) {
   const orderId = id(form);
-  const path = `/orders/${orderId}`;
-  await requireUser(path, "admin");
+  const path = `/admin/orders/${orderId}`;
+  await requireAdmin(path);
   const approve = field(form, "decision") === "approve";
   await attempt(path, () => verifyManualPayment(orderId, approve, approve ? optional(form, "reference", 120) ?? "" : text(form, "reason", 3, 300)));
   await (approve ? notify.paid(orderId) : notify.rejected(orderId));
@@ -208,8 +216,8 @@ export async function verifyPayment(form: FormData) {
 
 export async function deliverOrder(form: FormData) {
   const orderId = id(form);
-  const path = `/orders/${orderId}`;
-  const user = await requireUser(path, "seller");
+  const path = `/sell/orders/${orderId}`;
+  const user = await requireSeller(path);
   await attempt(path, async () => {
     const order = await orderById(orderId);
     if (!order || order.seller_id !== user.id) throw new ActionError("err.orderUnavailable");
@@ -246,14 +254,14 @@ export async function requestRefund(form: FormData) {
     [order, user.id, text(form, "reason", 5, 500), optional(form, "account", 200)]);
     if (!updated) throw new ActionError("err.manualSupport");
   });
-  await notify.admin("退款申请 / Refund requested", path, user.email);
+  await notify.admin("退款申请 / Refund requested", `/admin${path}`, user.email);
   message(path, "success", "ok.refundRequested");
 }
 
 export async function reviewRefund(form: FormData) {
   const order = id(form);
-  const path = `/orders/${order}`;
-  await requireUser(path, "admin");
+  const path = `/admin/orders/${order}`;
+  await requireAdmin(path);
   await attempt(path, async () => {
     if (field(form, "decision") === "approve") await approveRefund(order, field(form, "reference").slice(0, 120));
     else {
@@ -269,16 +277,16 @@ export async function reviewRefund(form: FormData) {
 
 export async function settleOrder(form: FormData) {
   const order = id(form);
-  const path = `/orders/${order}`;
-  await requireUser(path, "admin");
+  const path = `/admin/orders/${order}`;
+  await requireAdmin(path);
   await attempt(path, () => settle(order, field(form, "reference").slice(0, 120)));
   await notify.settled(order);
   message(path, "success", "ok.settled");
 }
 
 export async function createListing(form: FormData) {
-  const user = await requireUser("/sell", "seller");
-  await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/new");
+  await attempt("/sell/new", async () => {
     const event = id(form, "event");
     const quantity = scaled(form, "quantity", 1, 100);
     const price = scaled(form, "price", 200, 2500000, true);
@@ -308,13 +316,13 @@ export async function createListing(form: FormData) {
       throw new ActionError("err.eventUnavailable");
     }
   });
-  await notify.admin("新挂单待审核 / Listing to review", "/admin", user.name);
-  message("/sell", "success", "ok.listingSubmitted");
+  await notify.admin("新挂单待审核 / Listing to review", "/admin/listings", user.name);
+  message("/sell/listings", "success", "ok.listingSubmitted");
 }
 
 export async function reviewListing(form: FormData) {
-  await requireUser("/admin", "admin");
-  await attempt("/admin", async () => {
+  await requireAdmin("/admin/listings");
+  await attempt("/admin/listings", async () => {
     const status = field(form, "decision");
     if (!["active","rejected","paused"].includes(status)) throw new ActionError("err.decision");
     const [updated] = await query<{ event_id: string; was: string }>(`UPDATE listings l SET status=$2,paused_by_admin=($2='paused'),updated_at=now()
@@ -324,12 +332,12 @@ export async function reviewListing(form: FormData) {
     if (!updated) throw new ActionError("err.listingChanged");
     if (status === "active" && updated.was === "pending") await notify.newTickets(updated.event_id);
   });
-  message("/admin", "success", "ok.listingUpdated");
+  message("/admin/listings", "success", "ok.listingUpdated");
 }
 
 export async function pauseListing(form: FormData) {
-  const user = await requireUser("/sell", "seller");
-  await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/listings");
+  await attempt("/sell/listings", async () => {
     const status = field(form, "decision");
     if (!["active","paused"].includes(status)) throw new ActionError("err.decision");
     const [updated] = await query(`UPDATE listings SET status=$3 WHERE id=$1 AND seller_id=$2 AND
@@ -337,12 +345,12 @@ export async function pauseListing(form: FormData) {
     [id(form), user.id, status]);
     if (!updated) throw new ActionError("err.needsAdmin");
   });
-  message("/sell", "success", "ok.listingUpdated");
+  message("/sell/listings", "success", "ok.listingUpdated");
 }
 
 export async function updateFees(form: FormData) {
-  await requireUser("/admin", "admin");
-  const path = "/admin?tab=settings";
+  const path = "/admin/settings";
+  await requireAdmin(path);
   await attempt(path, async () => {
     const cap = field(form, "max markup") === "" ? null : scaled(form, "max markup", 0, 100000, true);
     await query("UPDATE fee_settings SET buyer_bps=$1,seller_bps=$2,max_markup_bps=$3",
@@ -352,8 +360,8 @@ export async function updateFees(form: FormData) {
 }
 
 export async function savePaymentSettings(form: FormData) {
-  await requireUser("/admin", "admin");
-  const path = "/admin?tab=settings";
+  const path = "/admin/settings";
+  await requireAdmin(path);
   await attempt(path, async () => {
     const qr = await readImage(form.get("qr"), { width: 1000, height: 1400, lossless: true });
     const values = [optional(form, "bank", 60), optional(form, "holder", 80), optional(form, "account", 40),
@@ -392,8 +400,8 @@ async function eventFields(form: FormData, requireUpcoming: boolean) {
 }
 
 export async function createEvent(form: FormData) {
-  await requireUser("/admin", "admin");
-  const path = "/admin?tab=events";
+  await requireAdmin("/admin/events/new");
+  const path = "/admin/events/new";
   await attempt(path, async () => {
     const event = await eventFields(form, true);
     const slug = (event.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 65) || "event") + "-" + randomBytes(4).toString("hex");
@@ -406,11 +414,11 @@ export async function createEvent(form: FormData) {
         event.policy, event.transferHost, event.featured, poster, seatmap, event.address]);
     });
   });
-  message(path, "success", "ok.eventPublished");
+  message("/admin/events", "success", "ok.eventPublished");
 }
 
 export async function updateEvent(form: FormData) {
-  await requireUser("/admin", "admin");
+  await requireAdmin();
   const eventId = id(form);
   const path = `/admin/events/${eventId}`;
   await attempt(path, async () => {
@@ -433,8 +441,8 @@ export async function updateEvent(form: FormData) {
 }
 
 export async function closeEvent(form: FormData) {
-  await requireUser("/admin", "admin");
-  const path = "/admin?tab=events";
+  const path = "/admin/events";
+  await requireAdmin(path);
   await attempt(path, async () => {
     const active = field(form, "active");
     if (active !== "true" && active !== "false") throw new ActionError("err.decision");
@@ -444,8 +452,8 @@ export async function closeEvent(form: FormData) {
 }
 
 export async function onboarding() {
-  const user = await requireUser("/sell", "seller");
-  const url = await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/payouts");
+  const url = await attempt("/sell/payouts", async () => {
     if (paymentMode() !== "stripe") throw new ActionError("err.stripeOnboarding");
     const stripe = stripeClient();
     let account = user.stripe_account;
@@ -457,7 +465,7 @@ export async function onboarding() {
       await query("UPDATE users SET stripe_account=$2 WHERE id=$1 AND stripe_account IS NULL", [user.id, account]);
     }
     const link = await stripe.accountLinks.create({
-      type: "account_onboarding", account, refresh_url: `${appUrl()}/sell?connect=refresh`, return_url: `${appUrl()}/sell?connect=return`,
+      type: "account_onboarding", account, refresh_url: `${appUrl()}/sell/payouts?connect=refresh`, return_url: `${appUrl()}/sell/payouts?connect=return`,
     });
     return link.url;
   });
@@ -509,22 +517,22 @@ export async function resetPassword(form: FormData) {
 }
 
 export async function refreshPayouts() {
-  const user = await requireUser("/sell", "seller");
-  const ready = await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/payouts");
+  const ready = await attempt("/sell/payouts", async () => {
     if (paymentMode() !== "stripe" || !user.stripe_account) throw new ActionError("err.startOnboarding");
     const account = await stripeClient().accounts.retrieve(user.stripe_account);
     const enabled = !("deleted" in account) && account.payouts_enabled && account.capabilities?.transfers === "active";
     await query("UPDATE users SET stripe_ready=$2 WHERE id=$1", [user.id, enabled]);
     return enabled;
   });
-  if (ready) message("/sell", "success", "ok.payoutsReady");
-  message("/sell", "error", "err.stripeNotReady");
+  if (ready) message("/sell/payouts", "success", "ok.payoutsReady");
+  message("/sell/payouts", "error", "err.stripeNotReady");
 }
 
 export async function supportConfirmDelivery(form: FormData) {
   const order = id(form);
-  const path = `/orders/${order}`;
-  const admin = await requireUser(path, "admin");
+  const path = `/admin/orders/${order}`;
+  const admin = await requireAdmin(path);
   await attempt(path, async () => {
     const [updated] = await query(`UPDATE orders o SET status='confirmed',support_resolution=$2,support_confirmed_by=$3,support_confirmed_at=now()
       FROM listings l JOIN events e ON e.id=l.event_id
@@ -538,8 +546,8 @@ export async function supportConfirmDelivery(form: FormData) {
 
 export async function supportOpenRefund(form: FormData) {
   const order = id(form);
-  const path = `/orders/${order}`;
-  await requireUser(path, "admin");
+  const path = `/admin/orders/${order}`;
+  await requireAdmin(path);
   await attempt(path, async () => {
     const [updated] = await query(`UPDATE orders SET pre_refund_status=status,status='refund_requested',refund_reason=$2
       WHERE id=$1 AND status IN ('paid','delivered','confirmed') AND settled_at IS NULL RETURNING id`,
@@ -614,8 +622,8 @@ export async function changePassword(form: FormData) {
 }
 
 export async function updateListing(form: FormData) {
-  const user = await requireUser("/sell", "seller");
-  await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/listings");
+  await attempt("/sell/listings", async () => {
     const listing = id(form);
     const price = scaled(form, "price", 200, 2500000, true);
     const available = scaled(form, "available", 0, 100);
@@ -626,22 +634,22 @@ export async function updateListing(form: FormData) {
     [listing, user.id, price, available, cap]);
     if (!updated) throw new ActionError("err.listingEdit");
   });
-  message("/sell", "success", "ok.listingUpdated");
+  message("/sell/listings", "success", "ok.listingUpdated");
 }
 
 export async function closeListing(form: FormData) {
-  const user = await requireUser("/sell", "seller");
-  await attempt("/sell", async () => {
+  const user = await requireSeller("/sell/listings");
+  await attempt("/sell/listings", async () => {
     const [closed] = await query(`UPDATE listings SET status='closed',updated_at=now()
       WHERE id=$1 AND seller_id=$2 AND status IN ('pending','active','paused') RETURNING id`, [id(form), user.id]);
     if (!closed) throw new ActionError("err.listingChanged");
   });
-  message("/sell", "success", "ok.listingClosed");
+  message("/sell/listings", "success", "ok.listingClosed");
 }
 
 export async function setBan(form: FormData) {
-  const admin = await requireUser("/admin", "admin");
-  const path = "/admin?tab=users";
+  const path = "/admin/users";
+  const admin = await requireAdmin(path);
   await attempt(path, async () => {
     const target = id(form);
     if (target === admin.id) throw new ActionError("err.decision");
@@ -651,4 +659,61 @@ export async function setBan(form: FormData) {
     if (ban) await query("DELETE FROM sessions WHERE user_id=$1", [target]);
   });
   message(path, "success", "ok.userUpdated");
+}
+
+/** Admin console sign-in: only administrators get a session here. */
+export async function adminSignIn(form: FormData) {
+  const next = field(form, "next");
+  const target = /^\/admin(\/[a-z0-9/-]*)?$/.test(next) ? next : "/admin";
+  await attempt(`/admin/login?next=${encodeURIComponent(target)}`, async () => {
+    const email = field(form, "email").toLowerCase();
+    const password = String(form.get("password") ?? "");
+    if (!emailSchema.safeParse(email).success || password.length > 128) throw new ActionError("err.credentials");
+    if (!(await authAllowed(email))) throw new ActionError("err.tooMany");
+    const [user] = await query<{ id: string; password_hash: string; role: string; banned_at: Date | null }>(
+      "SELECT id,password_hash,role,banned_at FROM users WHERE email=$1", [email]);
+    if (!passwordMatches(password, user?.password_hash ?? dummyHash) || !user || user.banned_at || user.role !== "admin") throw new ActionError("err.credentials");
+    await createSession(user.id);
+  });
+  redirect(target);
+}
+
+/** Lets an administrator set a temporary password for a customer (e.g. when email isn't set up yet). */
+export async function adminSetPassword(form: FormData) {
+  const path = "/admin/users";
+  await requireAdmin(path);
+  await attempt(path, async () => {
+    const password = String(form.get("password") ?? "");
+    if (password.length < 12 || password.length > 128) throw new ActionError("err.passwordLength");
+    const target = id(form);
+    const [updated] = await query("UPDATE users SET password_hash=$2 WHERE id=$1 RETURNING id", [target, passwordHash(password)]);
+    if (!updated) throw new ActionError("err.invalid");
+    await query("DELETE FROM sessions WHERE user_id=$1", [target]);
+  });
+  message(path, "success", "ok.passwordReset");
+}
+
+/** One-time creation of the first administrator, protected by SETUP_TOKEN. Disabled once an admin exists. */
+export async function createFirstAdmin(form: FormData) {
+  const token = field(form, "token");
+  const path = `/setup?token=${encodeURIComponent(token)}`;
+  const userId = await attempt(path, async () => {
+    if (!setupTokenValid(token)) throw new ActionError("err.setupToken");
+    const name = text(form, "name", 2, 80);
+    const email = field(form, "email").toLowerCase();
+    const password = String(form.get("password") ?? "");
+    if (!emailSchema.safeParse(email).success) throw new ActionError("err.email");
+    if (password.length < 14 || password.length > 128) throw new ActionError("err.adminPassword");
+    return tx(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(66547194)");
+      const { rowCount } = await client.query("SELECT 1 FROM users WHERE role='admin' LIMIT 1");
+      if (rowCount) throw new ActionError("err.setupDone");
+      const { rows: [user] } = await client.query<{ id: string }>(`INSERT INTO users (name,email,password_hash,role,email_verified,terms_accepted_at)
+        VALUES ($1,$2,$3,'admin',true,now()) ON CONFLICT (email) DO UPDATE SET role='admin',password_hash=EXCLUDED.password_hash,email_verified=true
+        RETURNING id`, [name, email, passwordHash(password)]);
+      return user.id;
+    });
+  });
+  await createSession(userId);
+  redirect("/admin");
 }

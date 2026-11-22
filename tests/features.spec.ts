@@ -89,6 +89,7 @@ test("accounts: consent, saved events, profile, seller edits, CSV export and sus
 
     await seller.goto("/sell");
     await expect(seller.getByText("Live listings")).toBeVisible();
+    await seller.goto("/sell/listings");
     const row = seller.locator(".dashboard-row").filter({ hasText: "Comedy Night Live" });
     await row.getByText("Edit", { exact: true }).click();
     await row.getByLabel("Price per ticket (RM)").fill("90");
@@ -102,7 +103,7 @@ test("accounts: consent, saved events, profile, seller edits, CSV export and sus
     expect(await csv.text()).toContain("order_id,created_myt,paid_myt");
     expect((await fan.request.get("/api/admin/orders.csv?from=2020-01-01&to=2099-12-31")).status()).toBe(404);
 
-    await admin.goto(`/admin?tab=users&q=${encodeURIComponent(email)}`);
+    await admin.goto(`/admin/users?q=${encodeURIComponent(email)}`);
     await admin.locator(".admin-row").filter({ hasText: email }).getByRole("button", { name: "Suspend" }).click();
     await expect(admin.getByText("User updated.")).toBeVisible();
     await fan.goto("/account");
@@ -142,4 +143,52 @@ test("buyers can review a seller once after confirming receipt", async ({ browse
     await db.end();
     await buyer.context().close();
   }
+});
+
+test("the admin console, seller centre and customer site are separate", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, locale: "en-US" });
+  const page = await context.newPage();
+  await page.goto("/admin/users");
+  await expect(page).toHaveURL(/\/admin\/login/);
+  await expect(page.getByRole("heading", { name: "Admin sign in" })).toBeVisible();
+  await expect(page.locator(".topbar")).toHaveCount(0);
+  // A customer account can't open the console.
+  await page.getByLabel("Email address").fill("buyer@example.test");
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.locator(".notice.error")).toHaveText("Check your email and password.");
+  await page.getByLabel("Email address").fill("admin@example.test");
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("navigation", { name: "Admin console" }).getByRole("link", { name: /Orders/ })).toBeVisible();
+  await expect(page.locator(".topbar")).toHaveCount(0);
+  for (const [link, heading] of [["Orders", "Orders"], ["Listing review", "Listing review"], ["Events", "Events"], ["Users & sellers", "Users & sellers"], ["Settings", "Settings"]]) {
+    await page.getByRole("navigation", { name: "Admin console" }).getByRole("link", { name: new RegExp(`^${link}`) }).click();
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+  }
+  await expect(page.getByRole("heading", { name: "Launch checklist" })).toBeVisible();
+  expect((await page.request.get("/setup?token=anything-anything-anything")).status()).toBe(404);
+  await context.close();
+
+  const seller = await signedIn(browser, baseURL, "seller@example.test");
+  await seller.goto("/sell");
+  await expect(seller.getByRole("heading", { name: "Hi, Stage Door Tickets" })).toBeVisible();
+  const nav = seller.getByRole("navigation", { name: "Seller dashboard" });
+  for (const [link, heading] of [["List tickets", "List tickets"], ["Your listings", "Your listings"], ["Sales", "Sales"], ["Payouts", "Payouts"]]) {
+    await nav.getByRole("link", { name: new RegExp(`^${link}`) }).click();
+    await expect(seller.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+  }
+  await seller.goto("/sell/new");
+  await seller.locator(".list-form").getByLabel("Price per ticket (RM)").fill("100");
+  await expect(seller.locator(".price-preview")).toContainText("Buyer pays RM103");
+  await expect(seller.locator(".price-preview")).toContainText("You receive RM97");
+  await expect(seller.locator(".topbar")).toHaveCount(1);
+  await seller.context().close();
+
+  const buyer = await signedIn(browser, baseURL, "buyer@example.test");
+  await buyer.goto("/sell/new");
+  await expect(buyer).toHaveURL(/\/sell$/);
+  await expect(buyer.getByRole("heading", { name: "Sell tickets on Crazy Monkey" })).toBeVisible();
+  await buyer.context().close();
 });

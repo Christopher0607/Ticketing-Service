@@ -72,7 +72,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(rival.getByRole("heading", { name: "My account" })).toBeVisible();
     rivalId = (await db.query("SELECT id FROM users WHERE email=$1", [rivalEmail])).rows[0].id;
 
-    await admin.goto("/admin?tab=events");
+    await admin.goto("/admin/events/new");
     await admin.getByLabel("Event name").fill(label);
     await admin.getByLabel("Venue", { exact: true }).fill("Test Hall");
     await admin.getByLabel("City").fill("Kuala Lumpur");
@@ -86,7 +86,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     eventId = created.id;
     const eventPath = `/events/${created.slug}`;
 
-    await seller.goto("/sell");
+    await seller.goto("/sell/new");
     await seller.locator(".list-form").getByLabel("Event", { exact: true }).selectOption(eventId!);
     await seller.locator(".list-form").getByLabel("Seat or ticket section").fill("QA Balcony");
     await seller.locator(".list-form").getByLabel("Face value per ticket (RM)").fill("100");
@@ -99,7 +99,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(seller.getByText("Listing sent for review.")).toBeVisible();
     await buyer.goto(eventPath);
     await expect(buyer.getByText("No tickets available")).toBeVisible();
-    await admin.goto("/admin");
+    await admin.goto("/admin/listings");
     const review = admin.locator(".admin-listing").filter({ hasText: label });
     await review.getByText("View ownership proof").click();
     const proof = (await review.getByRole("link", { name: "Download proof file" }).getAttribute("href"))!;
@@ -122,7 +122,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(winner.getByRole("heading", { name: "Checkout" })).toBeVisible();
     await expect(winner.getByText("RM103", { exact: true })).toBeVisible();
 
-    await admin.goto("/admin?tab=settings");
+    await admin.goto("/admin/settings");
     await admin.getByLabel("Buyer fee (%)").fill("4.00");
     await admin.getByLabel("Seller fee (%)").fill("6.00");
     await admin.getByRole("button", { name: "Save rates" }).click();

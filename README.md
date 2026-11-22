@@ -25,6 +25,23 @@
 - 中英双语、手机底部导航、可添加到主屏幕（PWA）、SEO（sitemap、robots、Google 活动结构化数据）
 - 安全：Supabase 上所有表启用行级安全（RLS）、付款截图私有存储、上传图片重新编码、登录限流、管理员页面权限校验
 
+## 三个界面
+
+| 界面 | 网址 | 给谁用 |
+| --- | --- | --- |
+| 顾客网站 | `/` | 买家浏览活动、买票、付款、收票、评价 |
+| 卖家中心 | `/sell` | 卖家挂票、改价、转票、看收款（侧边栏：概览 / 挂票 / 我的挂单 / 销售订单 / 收款） |
+| 管理后台 | `/admin`（登录页 `/admin/login`） | 独立界面，不显示顾客网站的页头页脚：概览、订单、挂单审核、活动、用户与卖家、设置 |
+
+设置 `ADMIN_HOST`（例如 `admin.你的域名.com`）后，后台只能从这个域名打开。
+
+## 第一次上线会自动完成
+
+- **数据库自动建表**：网站第一次连上数据库时自动执行迁移（建表、开启 RLS、创建存储桶），不需要手动跑命令。
+- **创建管理员**：设置 `SETUP_TOKEN`（至少 24 位）后，打开 `/setup?token=你的SETUP_TOKEN` 创建第一个管理员；创建后该页面自动失效。
+- **还没设置邮件也能用**：未配置 Resend 时，注册自动通过验证，忘记密码会提示联系客服，管理员可在“用户与卖家”里帮用户设置临时密码。
+- Supabase 的根证书已内置，连接自动加密验证；`/api/health` 可检查数据库连接状态。
+
 ## 上线方案 A：Netlify + Supabase（全免费，推荐起步）
 
 | 服务 | 用途 | 免费额度（以官网为准） |
@@ -43,15 +60,9 @@
    - 同一页 **SSL Configuration → Download certificate**，下载 CA 证书。
    - Project Settings → **API**：复制 Project URL 和 `service_role`（或 secret）key。⚠️ 这个 key 绝不能公开。
 2. **Netlify**：用 GitHub 登录 → Add new site → Import from Git → 选 `Ticketing-Service`，**分支选 `main`**。构建设置会自动读取 `netlify.toml`。
-3. 复制 [`.env.netlify.example`](.env.netlify.example)，填好上面拿到的值（`DATABASE_SSL_CA` 粘贴证书全文），然后在 Netlify：Site configuration → Environment variables → **Import from a .env file**。
-4. Netlify → Deploys → **Trigger deploy**。正式部署时会先自动执行数据库迁移（建表、开启 RLS、创建 `media` 和 `private` 两个存储桶）。
-5. **创建管理员**（在自己电脑上执行一次）：
-
-   ```sh
-   git clone https://github.com/Christopher0607/Ticketing-Service.git && cd Ticketing-Service && npm ci
-   DATABASE_URL="Session pooler 连接串" DATABASE_SSL_CA="$(cat 下载的证书.crt)" \
-   ADMIN_EMAIL=你的邮箱 ADMIN_PASSWORD='至少14位的强密码' npm run db:admin
-   ```
+3. 复制 [`.env.netlify.example`](.env.netlify.example)，填好上面拿到的值（`DATABASE_SSL_CA` 可留空，已内置 Supabase 证书），然后在 Netlify：Site configuration → Environment variables → **Import from a .env file**。
+4. Netlify → Deploys → **Trigger deploy**。网站第一次访问数据库时会自动建表。
+5. **创建管理员**：打开 `https://你的网站/setup?token=你的SETUP_TOKEN`，填写姓名、邮箱、密码（至少 14 位）。之后从 `/admin/login` 登录后台。
 
 6. **绑定域名**：Netlify → Domain management → Add a domain，按提示修改 DNS，HTTPS 自动开通。把 `APP_URL` 改成正式域名后重新部署。
 7. 登录后台 → **设置**：填收款银行、户名、账号、DuitNow ID，上传 DuitNow 收款码 → **活动**：发布活动、上传海报。
@@ -59,8 +70,8 @@
 
 ### 分支说明
 
-- `main` = 正式网站。推送到 `main` 会触发 Netlify 正式部署（并迁移数据库）。
-- 其他分支 / Pull Request = Netlify 预览网址，**不会**迁移数据库。想让预览有独立数据，可再开一个免费的 Supabase 项目给预览用。
+- `main` = 正式网站。推送到 `main` 会触发 Netlify 正式部署。
+- 其他分支 / Pull Request = Netlify 预览网址。预览会连同一个数据库并自动迁移，所以想让预览有独立数据，请给预览另开一个免费的 Supabase 项目。
 - Netlify 免费额度按 credits 计算，正式部署也会消耗额度，建议功能做好、测试通过后再合并到 `main`。
 
 ### 免费方案的注意事项

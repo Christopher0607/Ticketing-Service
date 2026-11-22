@@ -154,3 +154,44 @@ export function ImageField({ name, label, hint, required, preview, compress = tr
     {hint && <small>{hint}</small>}
   </label>;
 }
+
+export type SideNavItem = { href: string; label: string; icon: ReactNode; badge?: number; exact?: boolean };
+
+/** Sidebar navigation for the admin console and seller centre (a scrolling tab row on phones). */
+export function SideNav({ items, label }: { items: SideNavItem[]; label: string }) {
+  const pathname = usePathname();
+  return <nav className="side-nav" aria-label={label}>
+    {items.map((item) => {
+      const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+      return <Link key={item.href} href={item.href} className={active ? "active" : undefined} aria-current={active ? "page" : undefined}>
+        {item.icon}<span>{item.label}</span>{item.badge ? <span className="side-badge">{item.badge}</span> : null}
+      </Link>;
+    })}
+  </nav>;
+}
+
+/** Face value and price inputs with a live preview of what the buyer pays and the seller receives. */
+export function PriceFields({ sellerBps, buyerBps, capBps, labels }: {
+  sellerBps: number; buyerBps: number; capBps: number | null;
+  labels: { face: string; price: string; buyerPays: string; youGet: string; overCap: string };
+}) {
+  const [face, setFace] = useState("");
+  const [price, setPrice] = useState("");
+  const toSen = (value: string) => (/^\d+(\.\d{1,2})?$/.test(value) ? Math.round(Number(value) * 100) : null);
+  const fee = (sen: number, bps: number) => Math.floor((sen * bps + 5000) / 10000);
+  const rm = (sen: number) => `RM${(sen / 100).toFixed(sen % 100 ? 2 : 0)}`;
+  const faceSen = toSen(face);
+  const priceSen = toSen(price);
+  const overCap = capBps !== null && faceSen !== null && priceSen !== null && priceSen > faceSen + Math.floor((faceSen * capBps) / 10000);
+  return <>
+    <div className="form-columns">
+      <label>{labels.face}<input name="face" type="number" min={1} max={25000} step=".01" required inputMode="decimal" value={face} onChange={(event) => setFace(event.target.value)} /></label>
+      <label>{labels.price}<input name="price" type="number" min={2} max={25000} step=".01" required inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></label>
+    </div>
+    {priceSen !== null && priceSen > 0 && <div className={overCap ? "price-preview over" : "price-preview"} aria-live="polite">
+      <span>{labels.buyerPays} <strong>{rm(priceSen + fee(priceSen, buyerBps))}</strong></span>
+      <span>{labels.youGet} <strong>{rm(priceSen - fee(priceSen, sellerBps))}</strong></span>
+      {overCap && <em>{labels.overCap}</em>}
+    </div>}
+  </>;
+}

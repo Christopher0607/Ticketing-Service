@@ -53,6 +53,20 @@ export function recentOrders(userId: string, role: "buyer" | "seller" | "admin",
   return query<Order>(`${orderFields} ${condition} ORDER BY o.created_at DESC LIMIT 100`, values);
 }
 
+/** Admin order search by status and free text (order number, buyer email or name, event title). */
+export function searchOrders(options: { statuses?: string[]; search?: string; limit?: number }) {
+  const search = (options.search ?? "").trim().toLowerCase().replace(/^cm-/, "");
+  return query<Order>(`${orderFields}
+    WHERE ($1::text[] IS NULL OR o.status=ANY($1))
+      AND ($2='' OR o.id::text LIKE $2||'%' OR strpos(lower(u.email||' '||u.name||' '||e.title),$2)>0)
+    ORDER BY o.created_at DESC LIMIT $3`, [options.statuses?.length ? options.statuses : null, search, options.limit ?? 100]);
+}
+
+export function sellerOrders(sellerId: string, statuses?: string[]) {
+  return query<Order>(`${orderFields} WHERE l.seller_id=$1 AND o.status NOT IN ('reserved','verifying','expired','cancelled')
+    AND ($2::text[] IS NULL OR o.status=ANY($2)) ORDER BY o.created_at DESC LIMIT 200`, [sellerId, statuses?.length ? statuses : null]);
+}
+
 export function reserve(listing: string, buyer: string, quantity: number) {
   const mode = paymentMode();
   if (!mode) throw new ActionError("err.checkoutUnavailable");

@@ -43,6 +43,7 @@ async function order(id: string) {
 }
 
 const link = (id: string) => `${site()}/orders/${id}`;
+const sellerLink = (id: string) => `${site()}/sell/orders/${id}`;
 const what = (o: OrderContext) => `${o.title} · ${o.quantity} × ${o.section} (${shortId(o.id)})`;
 
 export const notify = {
@@ -57,7 +58,7 @@ export const notify = {
       sendEmail(o.seller_email, "门票已售出，请转票 / Tickets sold — please transfer", [
         `你的门票已售出，请尽快通过官方平台转票到买家邮箱：${o.buyer_email}，然后在订单页登记转票编号。`,
         `Your tickets sold. Please transfer them through the official provider to ${o.buyer_email}, then record the transfer reference.`,
-        "", what(o), `实收 / Proceeds: ${money(o.subtotal - o.seller_fee)}`, link(o.id)]),
+        "", what(o), `实收 / Proceeds: ${money(o.subtotal - o.seller_fee)}`, sellerLink(o.id)]),
     ]);
   },
   async rejected(id: string) {
@@ -83,7 +84,7 @@ export const notify = {
     const o = await order(id);
     if (o) await sendEmail(o.seller_email, "款项已结算 / Payout sent", [
       `我们已把 ${money(o.subtotal - o.seller_fee)} 转到你的收款账户。`, `We have sent ${money(o.subtotal - o.seller_fee)} to your payout account.`,
-      "", what(o), `转账编号 / Reference: ${o.payout_ref ?? "-"}`, link(o.id)]);
+      "", what(o), `转账编号 / Reference: ${o.payout_ref ?? "-"}`, sellerLink(o.id)]);
   },
   /** Operator alerts. */
   async admin(subject: string, path: string, detail = "") {

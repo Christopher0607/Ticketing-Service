@@ -50,6 +50,8 @@ export const site = {
     regNo: process.env.COMPANY_REG_NO || "[SSM registration no.]",
     address: process.env.COMPANY_ADDRESS || "[Registered address]",
   }),
+  /** Optional dedicated host for the admin console, e.g. admin.example.com. */
+  adminHost: () => process.env.ADMIN_HOST?.trim().toLowerCase() || null,
   /** Link to the Crazy Monkey group-buy site. */
   groupBuyUrl: () => publicHttps(process.env.GROUPBUY_URL),
 };

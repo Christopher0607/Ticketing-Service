@@ -36,11 +36,11 @@ export async function Header() {
         <Link className="icon-link" href="/events" aria-label={t("search.button")}><Search size={18} /></Link>
         <LangSwitch to={locale === "zh" ? "en" : "zh"} label={t("lang.switch")} title={t("lang.label")} />
         {user?.role === "admin" ? <Link className="nav-sell" href="/admin">{t("nav.admin")}</Link> :
-          <Link className="nav-sell" href="/sell">{t("nav.sell")}</Link>}
+          <Link className="nav-sell" href="/sell">{user?.role === "seller" ? t("seller.title") : t("nav.sell")}</Link>}
         <Link className="account-link" aria-label={user ? t("nav.account") : t("nav.signIn")} href="/account"><UserRound size={17} /><span>{user ? t("nav.account") : t("nav.signIn")}</span></Link>
       </div>
     </div></header>
-    <TabBar labels={{ home: t("nav.home"), explore: t("nav.explore"), sell: user?.role === "admin" ? t("nav.admin") : t("nav.sell"), account: t("nav.account") }}
+    <TabBar labels={{ home: t("nav.home"), explore: t("nav.explore"), sell: user?.role === "admin" ? t("nav.admin") : user?.role === "seller" ? t("seller.title") : t("nav.sell"), account: t("nav.account") }}
       sellHref={user?.role === "admin" ? "/admin" : "/sell"} />
   </>;
 }
@@ -199,4 +199,13 @@ export function TrustPills({ t, buyer, seller }: { t: Translate; buyer: string; 
 export function SectionHead({ title, lead, href, linkLabel, id }: { title: string; lead?: string; href?: string; linkLabel?: string; id?: string }) {
   return <div className="section-header"><div><h2 id={id}>{title}</h2>{lead && <p>{lead}</p>}</div>
     {href && linkLabel && <Link href={href} className="button outline small">{linkLabel}</Link>}</div>;
+}
+
+/** Shown until the database is connected (e.g. right after the first deploy). */
+export function SetupPending({ t }: { t: Translate }) {
+  return <main id="content" className="shell page standalone-page">
+    <img src="/logo.png" alt="Crazy Monkey" width={96} height={96} className="landing-logo" />
+    <h1>{t("setup.pendingTitle")}</h1>
+    <p className="muted">{t("setup.pendingBody")}</p>
+  </main>;
 }

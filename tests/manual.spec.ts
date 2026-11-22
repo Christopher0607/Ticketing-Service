@@ -47,7 +47,7 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     await db.query("UPDATE fee_settings SET buyer_bps=300,seller_bps=300");
 
     // Event with an uploaded poster, served immutably from /media.
-    await admin.goto("/admin?tab=events");
+    await admin.goto("/admin/events/new");
     await admin.getByLabel("Event name").fill(label);
     await admin.getByLabel("Venue", { exact: true }).fill("Test Hall");
     await admin.getByLabel("City").fill("Kuala Lumpur");
@@ -78,12 +78,12 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     }
 
     // Markup cap: 10% over face value.
-    await admin.goto("/admin?tab=settings");
+    await admin.goto("/admin/settings");
     await admin.getByLabel("Max markup over face value (%)").fill("10");
     await admin.getByRole("button", { name: "Save rates" }).click();
     await expect(admin.getByText("Rates updated for new orders.")).toBeVisible();
     const list = async (price: string) => {
-      await seller.goto("/sell");
+      await seller.goto("/sell/new");
       await seller.locator(".list-form").getByLabel("Event", { exact: true }).selectOption(eventId!);
       await seller.locator(".list-form").getByLabel("Seat or ticket section").fill("Manual Rock Zone");
       await seller.locator(".list-form").getByLabel("Face value per ticket (RM)").fill("100");
@@ -96,7 +96,7 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     await expect(seller.locator(".notice.error")).toHaveText("The price is above the allowed markup over face value.");
     await list("110");
     await expect(seller.getByText("Listing sent for review.")).toBeVisible();
-    await admin.goto("/admin");
+    await admin.goto("/admin/listings");
     await admin.locator(".admin-listing").filter({ hasText: label }).getByRole("button", { name: "Approve listing" }).click();
     await expect(admin.getByText("Listing updated.")).toBeVisible();
     await buyer.goto(eventPath);
