@@ -87,10 +87,11 @@ async function recordStripePayment(client: PoolClient, order: Order, intent: Str
     [order.id, intent.id, chargeId]);
 }
 
+/** Applies a Stripe event once. Returns false when the event was already processed. */
 export async function handleStripeEvent(event: Stripe.Event) {
-  await tx(async (client) => {
+  return tx(async (client) => {
     const seen = await client.query("INSERT INTO stripe_events (id,type) VALUES ($1,$2) ON CONFLICT DO NOTHING", [event.id, event.type]);
-    if (!seen.rowCount) return;
+    if (!seen.rowCount) return false;
     if (event.type === "payment_intent.succeeded") {
       const intent = event.data.object;
       const id = intent.metadata.order_id;
@@ -132,6 +133,7 @@ export async function handleStripeEvent(event: Stripe.Event) {
         await client.query(`UPDATE orders SET pre_dispute_status=status,status='disputed' WHERE charge_id=$1 AND status NOT IN ('disputed','refunded')`, [charge]);
       }
     }
+    return true;
   });
 }
 

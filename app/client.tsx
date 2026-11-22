@@ -78,3 +78,79 @@ export function PaymentRefresh({ text }: { text: string }) {
   }, [router]);
   return <p role="status">{text}</p>;
 }
+
+export type Slide = { href: string; title: string; poster: string; kicker: string; meta: string[]; price: string | null; cta: string };
+
+/** Auto-advancing spotlight carousel (pauses on hover/focus, swipeable on phones). */
+export function HeroCarousel({ slides, label, previous, next }: { slides: Slide[]; label: string; previous: string; next: string }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [touch, setTouch] = useState<number | null>(null);
+  const count = slides.length;
+  const go = (step: number) => setIndex((current) => (current + step + count) % count);
+  useEffect(() => {
+    if (paused || count < 2) return;
+    const timer = setInterval(() => setIndex((current) => (current + 1) % count), 6000);
+    return () => clearInterval(timer);
+  }, [paused, count]);
+  return <section className="carousel" aria-roledescription="carousel" aria-label={label}
+    onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={() => setPaused(false)}
+    onTouchStart={(event) => setTouch(event.touches[0].clientX)}
+    onTouchEnd={(event) => { if (touch !== null) { const dx = event.changedTouches[0].clientX - touch; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); } setTouch(null); }}>
+    <div className="carousel-track" style={{ transform: `translateX(-${index * 100}%)` }}>
+      {slides.map((slide, i) => <article className="slide" key={slide.href} aria-roledescription="slide" aria-label={`${i + 1} / ${count}`} aria-hidden={i !== index}>
+        <div className="slide-bg" aria-hidden="true"><img src={slide.poster} alt="" /></div>
+        <div className="shell slide-inner">
+          <div className="slide-copy">
+            <span className="featured-label">{slide.kicker}</span>
+            <h2>{slide.title}</h2>
+            <ul className="slide-meta">{slide.meta.map((item) => <li key={item}>{item}</li>)}</ul>
+            {slide.price && <p className="slide-price">{slide.price}</p>}
+            <Link className="button primary" href={slide.href} tabIndex={i === index ? 0 : -1}>{slide.cta}</Link>
+          </div>
+          <Link className="slide-poster" href={slide.href} tabIndex={-1}><img src={slide.poster} alt={slide.title} /></Link>
+        </div>
+      </article>)}
+    </div>
+    {count > 1 && <>
+      <button type="button" className="carousel-arrow prev" aria-label={previous} onClick={() => go(-1)}>‹</button>
+      <button type="button" className="carousel-arrow next" aria-label={next} onClick={() => go(1)}>›</button>
+      <div className="carousel-dots">{slides.map((slide, i) => <button key={slide.href} type="button" aria-label={`${i + 1} / ${count}`}
+        aria-current={i === index} className={i === index ? "active" : undefined} onClick={() => setIndex(i)} />)}</div>
+    </>}
+  </section>;
+}
+
+/**
+ * File input for photos. Large images are resized and re-encoded in the browser before upload,
+ * which keeps uploads fast on mobile data and under serverless request limits (about 6 MB on Netlify).
+ */
+export function ImageField({ name, label, hint, required, preview, compress = true, maxSide = 2000 }: {
+  name: string; label: string; hint?: string; required?: boolean; preview?: string | null; compress?: boolean; maxSide?: number;
+}) {
+  const [url, setUrl] = useState<string | null>(preview ?? null);
+  return <label className="image-field">{label}
+    <input type="file" name={name} accept="image/jpeg,image/png,image/webp" required={required} onChange={async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      if (!file) return;
+      setUrl(URL.createObjectURL(file));
+      if (!compress || file.size < 900_000 || typeof createImageBitmap !== "function") return;
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+        if (!blob || blob.size >= file.size) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }));
+        input.files = transfer.files;
+      } catch { /* keep the original file */ }
+    }} />
+    {url && <img className="image-preview" src={url} alt="" />}
+    {hint && <small>{hint}</small>}
+  </label>;
+}

@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import type { PoolClient } from "pg";
 import { ActionError } from "./orders";
+import { deleteObject, putObject, remoteStorage } from "./storage";
 
 const maxUpload = 8 * 1024 * 1024;
 
@@ -28,7 +30,19 @@ export async function readImage(value: FormDataEntryValue | null, options: { wid
   }
 }
 
+/** Saves a public image (poster, seat map, QR) to Supabase Storage or the database and returns its id. */
 export async function storeMedia(client: PoolClient, data: Buffer) {
+  if (remoteStorage()) {
+    const id = randomUUID();
+    await putObject("media", `${id}.webp`, data, "image/webp", 31536000);
+    await client.query("INSERT INTO media (id,mime,remote) VALUES ($1,'image/webp',true)", [id]);
+    return id;
+  }
   const { rows: [row] } = await client.query<{ id: string }>("INSERT INTO media (data,mime) VALUES ($1,'image/webp') RETURNING id", [data]);
   return row.id;
+}
+
+export async function deleteMedia(client: PoolClient, id: string) {
+  const { rows: [row] } = await client.query<{ remote: boolean }>("DELETE FROM media WHERE id=$1 RETURNING remote", [id]);
+  if (row?.remote) await deleteObject("media", `${id}.webp`);
 }

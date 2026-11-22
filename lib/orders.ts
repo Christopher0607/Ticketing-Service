@@ -17,7 +17,7 @@ export type Order = {
   transfer_id: string | null; settled_at: Date | null; created_at: Date; paid_at: Date | null;
   refund_id: string | null; refund_reason: string | null; refund_attempt: number;
   transfer_ref: string | null; transfer_url: string | null; delivered_at: Date | null;
-  title: string; slug: string; section: string; starts_at: Date; venue: string; image: string; poster_id: string | null;
+  title: string; slug: string; section: string; starts_at: Date; venue: string; image: string; poster_id: string | null; poster_remote: boolean | null;
   seller_id: string; seller: string; stripe_account: string | null; buyer_email: string; buyer_name: string;
   transfer_host: string | null; support_resolution: string | null; support_confirmed_at: Date | null;
   has_receipt: boolean; receipt_at: Date | null; payment_ref: string | null; reject_reason: string | null;
@@ -30,10 +30,10 @@ const orderFields = `SELECT o.id,o.listing_id,o.buyer_id,o.quantity,o.subtotal,o
   o.payment_mode,o.status,o.expires_at,o.checkout_id,o.checkout_attempted,o.payment_intent,o.charge_id,o.net_payment,
   o.paid_at,o.delivered_at,o.transfer_ref,o.transfer_url,o.refund_reason,o.refund_id,o.refund_attempt,o.transfer_id,
   o.settled_at,o.created_at,o.support_resolution,o.support_confirmed_at,o.receipt_at,o.payment_ref,o.reject_reason,
-  o.refund_account,o.refund_ref,o.payout_ref,(o.receipt_file IS NOT NULL) AS has_receipt,
+  o.refund_account,o.refund_ref,o.payout_ref,(o.receipt_file IS NOT NULL OR o.receipt_path IS NOT NULL) AS has_receipt,
   l.section,l.seller_id,s.name AS seller,s.stripe_account,s.phone AS seller_phone,
   s.payout_bank,s.payout_name,s.payout_account,
-  e.title,e.slug,e.starts_at,e.venue,e.image,e.poster_id,e.transfer_host,u.email AS buyer_email,u.name AS buyer_name
+  e.title,e.slug,e.starts_at,e.venue,e.image,e.poster_id,(SELECT m.remote FROM media m WHERE m.id=e.poster_id) AS poster_remote,e.transfer_host,u.email AS buyer_email,u.name AS buyer_name
   FROM orders o JOIN listings l ON l.id=o.listing_id JOIN events e ON e.id=l.event_id
   JOIN users u ON u.id=o.buyer_id JOIN users s ON s.id=l.seller_id`;
 
@@ -57,6 +57,7 @@ export function reserve(listing: string, buyer: string, quantity: number) {
   const mode = paymentMode();
   if (!mode) throw new ActionError("err.checkoutUnavailable");
   return tx(async (client) => {
+    await releaseExpired(client);
     const { rows: [item] } = await client.query(`
       SELECT l.price,l.seller_id,f.buyer_bps,f.seller_bps
       FROM listings l JOIN events e ON e.id=l.event_id JOIN users s ON s.id=l.seller_id CROSS JOIN fee_settings f
@@ -80,6 +81,21 @@ export function reserve(listing: string, buyer: string, quantity: number) {
   });
 }
 
+/**
+ * Returns expired manual/demo reservations to sale. Runs on reads and before reserving, so holds are
+ * released on time without depending on a frequent cron (Stripe holds are reconciled by the job).
+ */
+export async function releaseExpired(client?: PoolClient) {
+  const sql = `WITH expired AS (
+      UPDATE orders SET status='expired'
+      WHERE status='reserved' AND payment_mode IN ('manual','demo') AND expires_at<=now()
+      RETURNING listing_id, quantity)
+    UPDATE listings l SET available=l.available+e.qty
+    FROM (SELECT listing_id, sum(quantity)::int AS qty FROM expired GROUP BY listing_id) e WHERE l.id=e.listing_id`;
+  if (client) await client.query(sql);
+  else await query(sql);
+}
+
 export async function release(client: PoolClient, order: Order, status: "expired" | "cancelled" = "expired") {
   const changed = await client.query("UPDATE orders SET status=$2 WHERE id=$1 AND status='reserved' RETURNING listing_id", [order.id, status]);
   if (changed.rowCount) await client.query("UPDATE listings SET available=available+$2 WHERE id=$1", [order.listing_id, order.quantity]);
@@ -98,7 +114,7 @@ export async function confirmDemo(id: string, buyer: string) {
 }
 
 /** Manual mode: the buyer uploads a transfer receipt; inventory stays held until an operator verifies it. */
-export function submitReceipt(id: string, buyer: string, image: Buffer) {
+export function submitReceipt(id: string, buyer: string, receipt: { file: Buffer | null; path: string | null }) {
   return tx(async (client) => {
     const order = await orderById(id, client);
     if (!order || order.buyer_id !== buyer || order.payment_mode !== "manual" || order.status !== "reserved") {
@@ -108,7 +124,8 @@ export function submitReceipt(id: string, buyer: string, image: Buffer) {
       await release(client, order);
       return false;
     }
-    await client.query("UPDATE orders SET status='verifying',receipt_file=$2,receipt_at=now(),reject_reason=NULL WHERE id=$1", [id, image]);
+    await client.query("UPDATE orders SET status='verifying',receipt_file=$2,receipt_path=$3,receipt_at=now(),reject_reason=NULL WHERE id=$1",
+      [id, receipt.file, receipt.path]);
     return true;
   });
 }

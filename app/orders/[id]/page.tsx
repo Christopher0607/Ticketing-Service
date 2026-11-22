@@ -2,16 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Check, ChevronLeft, LockKeyhole, MapPin, MessageCircle, QrCode, Ticket, Upload, UserRound } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { money, percent, posterUrl, shortId, uuid } from "@/lib/format";
+import { mediaUrl, money, percent, posterUrl, shortId, uuid } from "@/lib/format";
 import { i18n, type MessageKey } from "@/lib/i18n";
 import { paymentConfigured, paymentSettings } from "@/lib/market";
 import { orderById } from "@/lib/orders";
 import {
   cancelOrder, confirmReceipt, deliverOrder, payOrder, requestRefund, reviewRefund, settleOrder, supportConfirmDelivery,
-  supportOpenRefund, uploadReceipt, verifyPayment,
+  submitReview, supportOpenRefund, uploadReceipt, verifyPayment,
 } from "../../actions";
-import { CopyButton, Countdown, PaymentRefresh } from "../../client";
-import { Notice, Status, SupportLinks } from "../../ui";
+import { CopyButton, Countdown, ImageField, PaymentRefresh } from "../../client";
+import { Notice, Stars, Status, SupportLinks } from "../../ui";
+import { query } from "@/lib/db";
 
 export const metadata = { title: "Order" };
 
@@ -40,6 +41,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const total = order.subtotal + order.buyer_fee;
   const step = order.settled_at ? 4 : stepIndex[order.status];
   const pay = manual && buyer && awaitingPayment ? await paymentSettings() : null;
+  const [review] = order.status === "confirmed" && (buyer || seller || admin)
+    ? await query<{ rating: number; comment: string | null }>("SELECT rating,comment FROM reviews WHERE order_id=$1", [order.id]) : [];
   const reference = `CM-${shortId(order.id)}`;
   const shownStatus = expired ? "expired" : order.settled_at && order.status === "confirmed" ? "settled" : order.status;
   return <div className="shell page">
@@ -64,7 +67,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <div className="pay-amount"><span>{t("pay.amount")}</span><strong>{money(total)}</strong><CopyButton value={(total / 100).toFixed(2)} label={t("pay.copy")} done={t("pay.copied")} /></div>
             <p>{t("pay.exact")}</p>
             <div className="pay-grid">
-              {pay.qr_id && <figure className="pay-qr"><img src={`/media/${pay.qr_id}`} alt="DuitNow QR" /><figcaption>{t("pay.qr")}</figcaption></figure>}
+              {pay.qr_id && <figure className="pay-qr"><img src={mediaUrl(pay.qr_id, pay.qr_remote)} alt="DuitNow QR" /><figcaption>{t("pay.qr")}</figcaption></figure>}
               <dl className="pay-details">
                 <div><dt>{t("pay.reference")}</dt><dd><strong>{reference}</strong><CopyButton value={reference} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>
                 {pay.duitnow_id && <div><dt>{t("pay.duitnow")}</dt><dd>{pay.duitnow_id}<CopyButton value={pay.duitnow_id} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>}
@@ -76,8 +79,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             {pay.note && <p className="pay-note wrap">{pay.note}</p>}
             <form action={uploadReceipt} className="form-stack upload-form">
               <input type="hidden" name="id" value={id} />
-              <label>{t("pay.receipt")}<input name="receipt" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
-              <small>{t("pay.receiptHint")}</small>
+              <ImageField name="receipt" label={t("pay.receipt")} hint={t("pay.receiptHint")} required maxSide={1800} />
               <button className="button primary"><Upload size={17} /> {t("pay.upload")}</button>
             </form>
           </> : <p>{t("pay.notConfigured")}</p>}
@@ -146,6 +148,18 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             </form></>}
           {order.refund_ref && <p>{t("order.refundRef")}: {order.refund_ref}</p>}
         </div>}
+
+        {order.status === "confirmed" && (review ? <div className="panel review-box"><h2>{t("review.title")}</h2>
+          <Stars value={review.rating} />{review.comment && <p className="wrap">{review.comment}</p>}</div> :
+          buyer && <form action={submitReview} className="panel form-stack review-box">
+            <h2>{t("review.title")}</h2><p>{t("review.lead", { seller: order.seller })}</p>
+            <input type="hidden" name="id" value={id} />
+            <fieldset className="star-input"><legend className="sr-only">{t("review.rating")}</legend>
+              {[5, 4, 3, 2, 1].map((n) => <label key={n} title={`${n}`}><input type="radio" name="rating" value={n} required defaultChecked={n === 5} /><span aria-hidden="true">★</span><span className="sr-only">{n}</span></label>)}
+            </fieldset>
+            <label>{t("review.comment")}<textarea name="comment" maxLength={500} placeholder={t("review.placeholder")} /></label>
+            <button className="button primary">{t("review.submit")}</button>
+          </form>)}
 
         {admin && <div className="panel contacts">
           <p><UserRound size={16} /> {order.buyer_name} · {order.buyer_email}</p>

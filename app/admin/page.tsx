@@ -1,21 +1,22 @@
 import Link from "next/link";
 import {
-  BadgeDollarSign, CalendarPlus, ChevronRight, ClipboardList, Landmark, ListChecks, MessageCircle, Percent, QrCode,
+  Ban, BadgeDollarSign, CalendarPlus, ChevronRight, ClipboardList, Download, Landmark, ListChecks, MessageCircle, Percent, QrCode,
   ReceiptText, Ticket, Undo2, Users, Wallet,
 } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { paymentMode } from "@/lib/config";
 import { query } from "@/lib/db";
-import { money, shortId } from "@/lib/format";
+import { mediaUrl, money, shortId } from "@/lib/format";
 import { i18n, type Translate } from "@/lib/i18n";
 import { fees, paymentSettings } from "@/lib/market";
 import { recentOrders, type Order } from "@/lib/orders";
-import { approveSeller, closeEvent, createEvent, reviewListing, savePaymentSettings, updateFees } from "../actions";
+import { approveSeller, closeEvent, createEvent, reviewListing, savePaymentSettings, setBan, updateFees } from "../actions";
+import { ImageField } from "../client";
 import { Notice, Status } from "../ui";
 import { EventForm } from "./event-form";
 
 export const metadata = { title: "Admin" };
-const tabs = ["review", "orders", "events", "settings"] as const;
+const tabs = ["review", "orders", "events", "users", "settings"] as const;
 type Tab = (typeof tabs)[number];
 
 function OrderRows({ t, orders, empty }: { t: Translate; orders: Order[]; empty: string }) {
@@ -25,7 +26,7 @@ function OrderRows({ t, orders, empty }: { t: Translate; orders: Order[]; empty:
     <Status t={t} value={order.settled_at && order.status === "confirmed" ? "settled" : order.status} /><ChevronRight size={17} /></Link>)}</>;
 }
 
-export default async function Admin({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; tab?: string }> }) {
+export default async function Admin({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; tab?: string; q?: string }> }) {
   const user = await requireUser("/admin", "admin");
   const [params, { t, f }] = await Promise.all([searchParams, i18n()]);
   const tab: Tab = tabs.find((value) => value === params.tab) ?? "review";
@@ -45,7 +46,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   ]);
   const toSettle = confirmed.filter((order) => !order.settled_at && order.starts_at.getTime() + 86400000 <= Date.now());
   const pending = verifying.length + refunds.length + toSettle.length + applications.length + stats.pending_listings;
-  const counts: Record<Tab, number> = { review: pending, orders: 0, events: 0, settings: 0 };
+  const counts: Record<Tab, number> = { review: pending, orders: 0, events: 0, users: 0, settings: 0 };
   return <div className="shell page">
     <div className="page-heading"><h1>{t("admin.title")}</h1><p>{t("admin.lead")}</p></div>
     <div className="stat-grid">
@@ -89,6 +90,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
     </div>}
 
     {tab === "orders" && <AdminOrders t={t} userId={user.id} />}
+    {tab === "users" && <AdminUsers t={t} search={typeof params.q === "string" ? params.q.trim().slice(0, 100) : ""} adminId={user.id} date={f.date} />}
     {tab === "events" && <AdminEvents t={t} date={f.date} />}
     {tab === "settings" && <AdminSettings t={t} />}
   </div>;
@@ -96,8 +98,39 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
 
 async function AdminOrders({ t, userId }: { t: Translate; userId: string }) {
   const orders = await recentOrders(userId, "admin");
-  return <section className="panel admin-panel"><h2><ClipboardList size={20} /> {t("admin.orders")}</h2>
-    <OrderRows t={t} orders={orders} empty={t("admin.noOrders")} /></section>;
+  const today = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+  const monthStart = `${today.slice(0, 8)}01`;
+  return <div className="row-list">
+    <section className="panel admin-panel export-panel"><h2><Download size={20} /> {t("admin.export")}</h2><p className="muted">{t("admin.exportLead")}</p>
+      <form action="/api/admin/orders.csv" method="get" className="inline-form">
+        <label>{t("admin.from")}<input type="date" name="from" defaultValue={monthStart} required /></label>
+        <label>{t("admin.to")}<input type="date" name="to" defaultValue={today} required /></label>
+        <button className="button outline"><Download size={16} /> {t("admin.download")}</button>
+      </form></section>
+    <section className="panel admin-panel"><h2><ClipboardList size={20} /> {t("admin.orders")}</h2>
+      <OrderRows t={t} orders={orders} empty={t("admin.noOrders")} /></section>
+  </div>;
+}
+
+async function AdminUsers({ t, search, adminId, date }: { t: Translate; search: string; adminId: string; date: (value: Date) => string }) {
+  const users = await query<{ id: string; name: string; email: string; role: string; phone: string | null; created_at: Date; banned_at: Date | null; orders: number; listings: number }>(`
+    SELECT u.id,u.name,u.email,u.role,u.phone,u.created_at,u.banned_at,
+      (SELECT count(*)::int FROM orders o WHERE o.buyer_id=u.id) AS orders,
+      (SELECT count(*)::int FROM listings l WHERE l.seller_id=u.id) AS listings
+    FROM users u WHERE ($1='' OR strpos(lower(u.email||' '||u.name||' '||coalesce(u.phone,'')),lower($1))>0)
+    ORDER BY u.created_at DESC LIMIT 50`, [search]);
+  return <section className="panel admin-panel"><h2><Users size={20} /> {t("admin.users")}</h2>
+    <form className="inline-form user-search" action="/admin"><input type="hidden" name="tab" value="users" />
+      <input name="q" defaultValue={search} placeholder={t("admin.searchUsers")} aria-label={t("admin.searchUsers")} maxLength={100} />
+      <button className="button outline small">{t("search.button")}</button></form>
+    {!users.length && <p className="muted">{t("admin.noUsers")}</p>}
+    {users.map((person) => <div className="admin-row" key={person.id}>
+      <div><strong>{person.name} <span className={`status status-${person.banned_at ? "rejected" : person.role === "seller" ? "active" : "paused"}`}>{person.banned_at ? t("admin.banned") : t(`role.${person.role as "buyer" | "seller" | "admin"}`)}</span></strong>
+        <p>{person.email}{person.phone && ` · +${person.phone}`} · {t("admin.userMeta", { orders: person.orders, listings: person.listings, date: date(person.created_at) })}</p></div>
+      {person.role !== "admin" && person.id !== adminId && <form action={setBan}><input type="hidden" name="id" value={person.id} /><input type="hidden" name="ban" value={String(!person.banned_at)} />
+        <button className={person.banned_at ? "button outline small" : "button ghost small danger"}><Ban size={14} /> {person.banned_at ? t("admin.unban") : t("admin.ban")}</button></form>}
+    </div>)}
+  </section>;
 }
 
 async function AdminEvents({ t, date }: { t: Translate; date: (value: Date) => string }) {
@@ -136,8 +169,7 @@ async function AdminSettings({ t }: { t: Translate }) {
           <label>{t("pay.accountName")}<input name="holder" maxLength={80} defaultValue={pay.account_name ?? ""} /></label></div>
         <div className="form-columns"><label>{t("pay.accountNumber")}<input name="account" maxLength={40} defaultValue={pay.account_number ?? ""} /></label>
           <label>{t("pay.duitnow")}<input name="duitnow" maxLength={60} defaultValue={pay.duitnow_id ?? ""} /></label></div>
-        <div className="poster-field">{pay.qr_id && <img src={`/media/${pay.qr_id}`} alt="" className="qr-preview" />}
-          <label>{t("admin.qr")}<input name="qr" type="file" accept="image/jpeg,image/png,image/webp" /></label></div>
+        <ImageField name="qr" label={t("admin.qr")} preview={pay.qr_id ? mediaUrl(pay.qr_id, pay.qr_remote) : null} compress={false} />
         <label>{t("admin.note")}<textarea name="note" maxLength={300} defaultValue={pay.note ?? ""} /></label>
         <button className="button primary">{t("admin.savePayment")}</button>
       </form>

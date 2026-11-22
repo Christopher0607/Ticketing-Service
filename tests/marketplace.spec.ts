@@ -67,13 +67,14 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await rival.getByLabel("Your name").fill("QA Buyer");
     await rival.getByLabel("Email address").fill(rivalEmail);
     await rival.getByLabel("Password", { exact: true }).fill(password);
+    await rival.getByRole("checkbox", { name: /I have read and agree/ }).check();
     await rival.getByRole("button", { name: "Create account" }).click();
     await expect(rival.getByRole("heading", { name: "My account" })).toBeVisible();
     rivalId = (await db.query("SELECT id FROM users WHERE email=$1", [rivalEmail])).rows[0].id;
 
     await admin.goto("/admin?tab=events");
     await admin.getByLabel("Event name").fill(label);
-    await admin.getByLabel("Venue").fill("Test Hall");
+    await admin.getByLabel("Venue", { exact: true }).fill("Test Hall");
     await admin.getByLabel("City").fill("Kuala Lumpur");
     await admin.getByLabel("Start (Malaysia time)").fill(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16));
     await admin.getByLabel("Description").fill("Local automated marketplace fixture.");
@@ -86,12 +87,12 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     const eventPath = `/events/${created.slug}`;
 
     await seller.goto("/sell");
-    await seller.getByLabel("Event", { exact: true }).selectOption(eventId!);
-    await seller.getByLabel("Seat or ticket section").fill("QA Balcony");
-    await seller.getByLabel("Face value per ticket (RM)").fill("100");
-    await seller.getByLabel("Price per ticket (RM)").fill("100");
-    await seller.getByLabel("Proof of ticket ownership").fill("Private provider order example reference");
-    await seller.getByLabel("Redacted proof file (optional)").setInputFiles({
+    await seller.locator(".list-form").getByLabel("Event", { exact: true }).selectOption(eventId!);
+    await seller.locator(".list-form").getByLabel("Seat or ticket section").fill("QA Balcony");
+    await seller.locator(".list-form").getByLabel("Face value per ticket (RM)").fill("100");
+    await seller.locator(".list-form").getByLabel("Price per ticket (RM)").fill("100");
+    await seller.locator(".list-form").getByLabel("Proof of ticket ownership").fill("Private provider order example reference");
+    await seller.locator(".list-form").getByLabel("Redacted proof file (optional)").setInputFiles({
       name: "redacted.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\nQA test fixture"),
     });
     await seller.getByRole("button", { name: "Submit for review" }).click();

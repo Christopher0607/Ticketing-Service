@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { ChevronRight, CircleDollarSign, Landmark, ListPlus, Ticket } from "lucide-react";
+import { ChevronRight, CircleDollarSign, Landmark, ListPlus, Pencil, Ticket, Wallet } from "lucide-react";
 import { currentUser } from "@/lib/auth";
 import { paymentMode } from "@/lib/config";
 import { query } from "@/lib/db";
 import { fee, money, percent } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
-import { events, fees } from "@/lib/market";
+import { events, fees, sellerSummary } from "@/lib/market";
 import { recentOrders } from "@/lib/orders";
-import { createListing, onboarding, pauseListing, refreshPayouts, requestSelling, savePayout } from "../actions";
+import { closeListing, createListing, onboarding, pauseListing, refreshPayouts, requestSelling, savePayout, updateListing } from "../actions";
 import { Empty, Notice, Status, SupportLinks } from "../ui";
 
 export async function generateMetadata() {
@@ -38,16 +38,23 @@ export default async function Seller({ searchParams }: { searchParams: Promise<{
     </div>;
   }
   const mode = paymentMode();
-  const [listings, catalogue, orders] = await Promise.all([
-    query<{ id: string; title: string; section: string; price: number; available: number; quantity: number; status: string; paused_by_admin: boolean }>(`
-      SELECT l.id,l.section,l.price,l.available,l.quantity,l.status,l.paused_by_admin,e.title FROM listings l JOIN events e ON e.id=l.event_id
-      WHERE seller_id=$1 ORDER BY l.created_at DESC LIMIT 100`, [user.id]),
-    events(), recentOrders(user.id, "seller"),
+  const [listings, catalogue, orders, summary] = await Promise.all([
+    query<{ id: string; title: string; section: string; price: number; face_value: number | null; available: number; quantity: number; status: string; paused_by_admin: boolean }>(`
+      SELECT l.id,l.section,l.price,l.face_value,l.available,l.quantity,l.status,l.paused_by_admin,e.title FROM listings l JOIN events e ON e.id=l.event_id
+      WHERE seller_id=$1 AND l.status<>'closed' ORDER BY l.created_at DESC LIMIT 100`, [user.id]),
+    events(), recentOrders(user.id, "seller"), sellerSummary(user.id),
   ]);
   const cap = settings.max_markup_bps;
   return <div className="shell page">
-    <div className="page-heading"><h1>{t("seller.title")}</h1><p>{t("seller.lead")}</p></div>
+    <div className="page-heading heading-split"><div><h1>{t("seller.title")}</h1><p>{t("seller.lead")}</p></div>
+      <Link className="button outline small" href={`/sellers/${user.id}`}>{t("account.publicProfile")}</Link></div>
     <Notice t={t} error={params.error} success={params.success} />
+    <div className="stat-grid">
+      <div className="stat"><Ticket size={20} /><span>{t("seller.stat.live")}</span><strong>{summary.live}</strong></div>
+      <div className="stat"><ListPlus size={20} /><span>{t("seller.stat.sold")}</span><strong>{summary.sold}</strong></div>
+      <div className="stat gold"><Wallet size={20} /><span>{t("seller.stat.pending")}</span><strong>{money(summary.pending)}</strong></div>
+      <div className="stat"><CircleDollarSign size={20} /><span>{t("seller.stat.paid")}</span><strong>{money(summary.paid)}</strong></div>
+    </div>
     {mode === "stripe" && <section className="panel callout"><div><h2>{t("seller.stripe.title")}</h2>
       <p>{user.stripe_ready ? t("seller.stripe.ready") : params.connect ? t("seller.stripe.check") : t("seller.stripe.todo")}</p></div>
       <div className="inline-form"><form action={onboarding}><button className="button outline">{t("seller.stripe.open")}</button></form>
@@ -77,6 +84,17 @@ export default async function Seller({ searchParams }: { searchParams: Promise<{
             <input type="hidden" name="id" value={listing.id} /><input type="hidden" name="decision" value={listing.status === "active" ? "paused" : "active"} />
             <button className="button outline small">{listing.status === "active" ? t("seller.pause") : t("seller.resume")}</button>
           </form>}
+          {["pending","active","paused"].includes(listing.status) && <details className="listing-edit">
+            <summary><Pencil size={14} /> {t("seller.edit")}</summary>
+            <form action={updateListing} className="form-stack">
+              <input type="hidden" name="id" value={listing.id} />
+              <div className="form-columns"><label>{t("seller.list.price")}<input name="price" type="number" min={2} max={25000} step=".01" required defaultValue={(listing.price / 100).toFixed(2)} /></label>
+                <label>{t("seller.editAvailable")}<input name="available" type="number" min={0} max={listing.available} required defaultValue={listing.available} /></label></div>
+              <small>{t("seller.editHint")}</small>
+              <button className="button primary small">{t("seller.saveListing")}</button>
+            </form>
+            <form action={closeListing}><input type="hidden" name="id" value={listing.id} /><button className="button ghost small">{t("seller.close")}</button></form>
+          </details>}
         </article>)}</div> : <Empty title={t("seller.noListings")} />}
         <div className="section-header compact"><div><h2>{t("seller.sales")}</h2></div></div>
         {orders.length ? <div className="row-list">{orders.map((order) => <Link className="panel dashboard-row" href={`/orders/${order.id}`} key={order.id}>

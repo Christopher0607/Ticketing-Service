@@ -22,8 +22,8 @@ export function passwordMatches(password: string, hash: string) {
 
 export async function authAllowed(email: string) {
   const head = await headers();
-  // Configure the reverse proxy to overwrite X-Real-IP, never pass a client-supplied value.
-  const ip = head.get("x-real-ip") ?? "local";
+  // Behind Caddy/nginx use X-Real-IP (overwritten by the proxy); on Netlify set CLIENT_IP_HEADER=x-nf-client-connection-ip.
+  const ip = head.get((process.env.CLIENT_IP_HEADER || "x-real-ip").toLowerCase()) ?? "local";
   const counters = await query<{ key: string; attempts: number }>(`
     INSERT INTO auth_limits (key, attempts) VALUES ($1, 1), ($2, 1)
     ON CONFLICT (key) DO UPDATE SET
@@ -53,7 +53,7 @@ export async function currentUser() {
   const token = (await cookies()).get(sessionCookie)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const [user] = await query<User>(`SELECT u.id,u.name,u.email,u.role,u.stripe_account,u.stripe_ready,u.email_verified,u.phone,u.payout_bank,u.payout_name,u.payout_account
-    FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(token)]);
+    FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.banned_at IS NULL`, [digest(token)]);
   return user ?? null;
 }
 

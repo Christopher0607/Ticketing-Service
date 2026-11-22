@@ -1,0 +1,14 @@
+# Netlify (free plan) + Supabase deployment. Environment variables are set in the Netlify UI,
+# because variables declared in this file are not available to functions at runtime.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Only production deploys migrate the database. Point deploy previews at a separate
+# (free) Supabase project if you want them to have data.
+[context.production]
+  command = "npm run db:migrate && npm run build"
+
+[functions]
+  node_bundler = "esbuild"

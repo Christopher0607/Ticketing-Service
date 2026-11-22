@@ -8,14 +8,22 @@ export const money = (sen: number) => new Intl.NumberFormat("en-MY", {
 
 export const fee = (sen: number, bps: number) => Math.floor((sen * bps + 5000) / 10000);
 export const percent = (bps: number) => `${bps / 100}%`;
+/** Percentage rounded to one decimal place, for display. */
+export const percentRounded = (bps: number) => `${Math.round(bps / 10) / 10}%`;
 export const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const shortId = (id: string) => id.slice(0, 8).toUpperCase();
 
 /** Markup of a resale price over face value, in basis points (negative when below face value). */
 export const markupBps = (price: number, face: number) => Math.round(((price - face) * 10000) / face);
 
-export const posterUrl = (item: { poster_id?: string | null; image: string }) =>
-  item.poster_id ? `/media/${item.poster_id}` : `/images/${item.image}.webp`;
+/** Public image URL: Supabase Storage's CDN for files stored there, otherwise served from the database. */
+export function mediaUrl(id: string, remote?: boolean | null) {
+  const base = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+  return remote && base ? `${base}/storage/v1/object/public/media/${id}.webp` : `/media/${id}`;
+}
+
+export const posterUrl = (item: { poster_id?: string | null; poster_remote?: boolean | null; image: string }) =>
+  item.poster_id ? mediaUrl(item.poster_id, item.poster_remote) : `/images/${item.image}.webp`;
 
 const timeZone = "Asia/Kuala_Lumpur";
 

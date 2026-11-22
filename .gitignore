@@ -11,3 +11,5 @@ test-results/
 playwright-report/
 !.env.production.example
 backups/
+.netlify/
+!.env.netlify.example

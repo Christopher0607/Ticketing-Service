@@ -26,6 +26,7 @@ test("markup over face value and poster fallbacks", () => {
   assert.equal(markupBps(9000, 10000), -1000);
   assert.equal(posterUrl({ poster_id: null, image: "concert" }), "/images/concert.webp");
   assert.equal(posterUrl({ poster_id: "abc", image: "concert" }), "/media/abc");
+  assert.equal(posterUrl({ poster_id: "abc", poster_remote: true, image: "concert" }), "/media/abc");
 });
 
 test("every English message has a Chinese translation", () => {

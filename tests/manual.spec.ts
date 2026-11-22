@@ -49,7 +49,7 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     // Event with an uploaded poster, served immutably from /media.
     await admin.goto("/admin?tab=events");
     await admin.getByLabel("Event name").fill(label);
-    await admin.getByLabel("Venue").fill("Test Hall");
+    await admin.getByLabel("Venue", { exact: true }).fill("Test Hall");
     await admin.getByLabel("City").fill("Kuala Lumpur");
     await admin.getByLabel("Start (Malaysia time)").fill(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 16));
     await admin.getByLabel("Description").fill("Manual payment automated fixture.");
@@ -61,11 +61,21 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     const created = (await db.query("SELECT id,slug,poster_id FROM events WHERE title=$1", [label])).rows[0];
     eventId = created.id;
     expect(created.poster_id).toBeTruthy();
+    // Served from Supabase Storage when configured (via redirect from /media), otherwise from the database.
     const poster = await admin.request.get(`/media/${created.poster_id}`);
     expect(poster.status()).toBe(200);
     expect(poster.headers()["content-type"]).toBe("image/webp");
-    expect(poster.headers()["cache-control"]).toContain("immutable");
+    expect(poster.headers()["cache-control"]).toContain("31536000");
     const eventPath = `/events/${created.slug}`;
+    await admin.goto(eventPath);
+    const src = await admin.locator(".event-poster img").getAttribute("src");
+    expect(src).toContain(created.poster_id);
+    expect((await admin.request.get(src!)).status()).toBe(200);
+    if (process.env.EXPECT_REMOTE_STORAGE === "true") {
+      expect((await db.query("SELECT remote FROM media WHERE id=$1", [created.poster_id])).rows[0].remote).toBe(true);
+      expect(src).toMatch(/^http:\/\/127\.0\.0\.1:54321\/storage\/v1\/object\/public\/media\//);
+      expect((await db.query("SELECT receipt_path FROM orders WHERE listing_id IN (SELECT id FROM listings WHERE event_id=$1)", [eventId])).rowCount).toBe(0);
+    }
 
     // Markup cap: 10% over face value.
     await admin.goto("/admin?tab=settings");
@@ -74,12 +84,12 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
     await expect(admin.getByText("Rates updated for new orders.")).toBeVisible();
     const list = async (price: string) => {
       await seller.goto("/sell");
-      await seller.getByLabel("Event", { exact: true }).selectOption(eventId!);
-      await seller.getByLabel("Seat or ticket section").fill("Manual Rock Zone");
-      await seller.getByLabel("Face value per ticket (RM)").fill("100");
-      await seller.getByLabel("Price per ticket (RM)").fill(price);
-      await seller.getByLabel("Quantity", { exact: true }).fill("3");
-      await seller.getByLabel("Proof of ticket ownership").fill("Provider order reference QA-1");
+      await seller.locator(".list-form").getByLabel("Event", { exact: true }).selectOption(eventId!);
+      await seller.locator(".list-form").getByLabel("Seat or ticket section").fill("Manual Rock Zone");
+      await seller.locator(".list-form").getByLabel("Face value per ticket (RM)").fill("100");
+      await seller.locator(".list-form").getByLabel("Price per ticket (RM)").fill(price);
+      await seller.locator(".list-form").getByLabel("Quantity", { exact: true }).fill("3");
+      await seller.locator(".list-form").getByLabel("Proof of ticket ownership").fill("Provider order reference QA-1");
       await seller.getByRole("button", { name: "Submit for review" }).click();
     };
     await list("120");
@@ -95,6 +105,11 @@ test("manual DuitNow payments: posters, markup cap, receipt review, payout and r
 
     // Order 1: receipt is private, admin verifies, seller transfers, buyer confirms, admin pays out.
     const first = await reserveAndUpload(buyer, eventPath);
+    if (process.env.EXPECT_REMOTE_STORAGE === "true") {
+      const { rows: [stored] } = await db.query("SELECT receipt_path,receipt_file IS NULL AS no_file FROM orders WHERE id=$1", [first.split("/").at(-1)]);
+      expect(stored.receipt_path).toMatch(/^receipts\//);
+      expect(stored.no_file).toBe(true);
+    }
     expect((await buyer.request.get(`/api${first}/receipt`)).status()).toBe(200);
     expect((await seller.request.get(`/api${first}/receipt`)).status()).toBe(404);
     expect((await db.query("SELECT available FROM listings WHERE event_id=$1", [eventId])).rows[0].available).toBe(2);

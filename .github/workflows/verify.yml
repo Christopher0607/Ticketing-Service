@@ -36,15 +36,19 @@ jobs:
       - run: npm run typecheck
       - run: npm run db:migrate && npm run db:seed
       - run: npx playwright install --with-deps chromium
-      - name: Browser tests (demo mode on :3000, manual DuitNow mode on :3002)
+      - name: Browser tests (demo mode with database files on :3000, manual DuitNow mode with Supabase Storage mock on :3002)
         env:
           MANUAL_BASE_URL: http://localhost:3002
+          EXPECT_REMOTE_STORAGE: "true"
         run: |
+          STORAGE_MOCK_KEY=test-service-key node tests/support/storage-mock.mjs 54321 > /tmp/storage-ci.log 2>&1 &
+          STORAGE=$!
           npm run start > /tmp/demo-ci.log 2>&1 &
           DEMO=$!
-          PAYMENT_MODE=manual APP_URL=http://localhost:3002 npm run start -- --port 3002 > /tmp/manual-ci.log 2>&1 &
+          PAYMENT_MODE=manual APP_URL=http://localhost:3002 SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=test-service-key \
+            npm run start -- --port 3002 > /tmp/manual-ci.log 2>&1 &
           MANUAL=$!
-          trap 'kill $DEMO $MANUAL' EXIT
+          trap 'kill $STORAGE $DEMO $MANUAL' EXIT
           curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3000/ -o /dev/null
           curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3002/ -o /dev/null
           npm run test:e2e

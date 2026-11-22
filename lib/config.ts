@@ -12,7 +12,7 @@ export function paymentMode(): PaymentMode | null {
 
 /** SQL predicate deciding whether a seller (aliased `s`) may currently sell, given the payment mode in `$n`. */
 export const sellerReady = (param: string) =>
-  `(CASE ${param} WHEN 'stripe' THEN s.stripe_ready WHEN 'manual' THEN s.payout_account IS NOT NULL ELSE true END)`;
+  `(s.banned_at IS NULL AND CASE ${param} WHEN 'stripe' THEN s.stripe_ready WHEN 'manual' THEN s.payout_account IS NOT NULL ELSE true END)`;
 
 export const configuredMode = () => process.env.PAYMENT_MODE ?? "";
 
@@ -44,8 +44,12 @@ export const site = {
     const digits = (process.env.SUPPORT_WHATSAPP ?? "").replace(/\D/g, "");
     return digits.length >= 8 && digits.length <= 15 ? digits : null;
   },
-  termsUrl: () => publicHttps(process.env.TERMS_URL),
-  privacyUrl: () => publicHttps(process.env.PRIVACY_URL),
+  /** Legal entity details shown in the footer and legal pages (placeholders until set). */
+  company: () => ({
+    name: process.env.COMPANY_NAME || "[Company name] Sdn. Bhd.",
+    regNo: process.env.COMPANY_REG_NO || "[SSM registration no.]",
+    address: process.env.COMPANY_ADDRESS || "[Registered address]",
+  }),
   /** Link to the Crazy Monkey group-buy site. */
   groupBuyUrl: () => publicHttps(process.env.GROUPBUY_URL),
 };
