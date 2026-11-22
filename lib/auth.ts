@@ -3,8 +3,11 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { query } from "./db";
 
-export type User = { id: string; name: string; email: string; role: "buyer" | "seller" | "admin"; stripe_account: string | null; stripe_ready: boolean; email_verified: boolean };
-const sessionCookie = "setlist_session";
+export type User = {
+  id: string; name: string; email: string; role: "buyer" | "seller" | "admin"; stripe_account: string | null; stripe_ready: boolean;
+  email_verified: boolean; phone: string | null; payout_bank: string | null; payout_name: string | null; payout_account: string | null;
+};
+const sessionCookie = "cm_session";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export function passwordHash(password: string) {
@@ -49,7 +52,7 @@ export async function clearSession() {
 export async function currentUser() {
   const token = (await cookies()).get(sessionCookie)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const [user] = await query<User>(`SELECT u.id,u.name,u.email,u.role,u.stripe_account,u.stripe_ready,u.email_verified
+  const [user] = await query<User>(`SELECT u.id,u.name,u.email,u.role,u.stripe_account,u.stripe_ready,u.email_verified,u.phone,u.payout_bank,u.payout_name,u.payout_account
     FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, [digest(token)]);
   return user ?? null;
 }

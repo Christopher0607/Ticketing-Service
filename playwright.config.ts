@@ -12,6 +12,7 @@ export default defineConfig({
   use: {
     ...devices["Desktop Chrome"],
     baseURL,
+    locale: "en-US",
     actionTimeout: 15000,
     trace: "retain-on-failure",
     launchOptions: { executablePath: process.env.CHROMIUM_PATH || undefined },

@@ -1,9 +1,13 @@
 import { type PoolClient } from "pg";
 import { query, tx } from "./db";
 import { fee } from "./format";
-import { paymentMode, type PaymentMode } from "./config";
+import { paymentMode, sellerReady, type PaymentMode } from "./config";
+import type { MessageKey } from "./messages";
 
-export class ActionError extends Error {}
+/** A user-facing failure. The message is a dictionary key, translated when rendered. */
+export class ActionError extends Error {
+  constructor(public key: MessageKey) { super(key); }
+}
 
 export type Order = {
   id: string; buyer_id: string; listing_id: string; quantity: number; subtotal: number;
@@ -13,12 +17,23 @@ export type Order = {
   transfer_id: string | null; settled_at: Date | null; created_at: Date; paid_at: Date | null;
   refund_id: string | null; refund_reason: string | null; refund_attempt: number;
   transfer_ref: string | null; transfer_url: string | null; delivered_at: Date | null;
-  title: string; slug: string; section: string; starts_at: Date; venue: string; image: string;
-  seller_id: string; seller: string; stripe_account: string | null; buyer_email: string;
+  title: string; slug: string; section: string; starts_at: Date; venue: string; image: string; poster_id: string | null;
+  seller_id: string; seller: string; stripe_account: string | null; buyer_email: string; buyer_name: string;
   transfer_host: string | null; support_resolution: string | null; support_confirmed_at: Date | null;
+  has_receipt: boolean; receipt_at: Date | null; payment_ref: string | null; reject_reason: string | null;
+  refund_account: string | null; refund_ref: string | null; payout_ref: string | null;
+  seller_phone: string | null; payout_bank: string | null; payout_name: string | null; payout_account: string | null;
 };
-const orderFields = `SELECT o.*,l.section,l.seller_id,s.name AS seller,s.stripe_account,
-  e.title,e.slug,e.starts_at,e.venue,e.image,e.transfer_host,u.email AS buyer_email
+
+// Explicit order columns keep the receipt image (bytea) out of ordinary reads.
+const orderFields = `SELECT o.id,o.listing_id,o.buyer_id,o.quantity,o.subtotal,o.buyer_bps,o.seller_bps,o.buyer_fee,o.seller_fee,
+  o.payment_mode,o.status,o.expires_at,o.checkout_id,o.checkout_attempted,o.payment_intent,o.charge_id,o.net_payment,
+  o.paid_at,o.delivered_at,o.transfer_ref,o.transfer_url,o.refund_reason,o.refund_id,o.refund_attempt,o.transfer_id,
+  o.settled_at,o.created_at,o.support_resolution,o.support_confirmed_at,o.receipt_at,o.payment_ref,o.reject_reason,
+  o.refund_account,o.refund_ref,o.payout_ref,(o.receipt_file IS NOT NULL) AS has_receipt,
+  l.section,l.seller_id,s.name AS seller,s.stripe_account,s.phone AS seller_phone,
+  s.payout_bank,s.payout_name,s.payout_account,
+  e.title,e.slug,e.starts_at,e.venue,e.image,e.poster_id,e.transfer_host,u.email AS buyer_email,u.name AS buyer_name
   FROM orders o JOIN listings l ON l.id=o.listing_id JOIN events e ON e.id=l.event_id
   JOIN users u ON u.id=o.buyer_id JOIN users s ON s.id=l.seller_id`;
 
@@ -28,29 +43,34 @@ export async function orderById(id: string, client?: PoolClient) {
   return order ?? null;
 }
 
-export function recentOrders(userId: string, role: "buyer" | "seller" | "admin") {
-  const condition = { buyer: "WHERE o.buyer_id=$1", seller: "WHERE l.seller_id=$1 AND o.status NOT IN ('reserved','expired','cancelled')", admin: "" }[role];
-  return query<Order>(`${orderFields} ${condition} ORDER BY o.created_at DESC LIMIT 100`, role === "admin" ? [] : [userId]);
+export function recentOrders(userId: string, role: "buyer" | "seller" | "admin", status?: string[]) {
+  const condition = {
+    buyer: "WHERE o.buyer_id=$1",
+    seller: "WHERE l.seller_id=$1 AND o.status NOT IN ('reserved','verifying','expired','cancelled')",
+    admin: status ? "WHERE o.status=ANY($1)" : "",
+  }[role];
+  const values = role === "admin" ? (status ? [status] : []) : [userId];
+  return query<Order>(`${orderFields} ${condition} ORDER BY o.created_at DESC LIMIT 100`, values);
 }
 
 export function reserve(listing: string, buyer: string, quantity: number) {
   const mode = paymentMode();
-  if (!mode) throw new ActionError("Checkout is temporarily unavailable.");
+  if (!mode) throw new ActionError("err.checkoutUnavailable");
   return tx(async (client) => {
     const { rows: [item] } = await client.query(`
       SELECT l.price,l.seller_id,f.buyer_bps,f.seller_bps
       FROM listings l JOIN events e ON e.id=l.event_id JOIN users s ON s.id=l.seller_id CROSS JOIN fee_settings f
       WHERE l.id=$1 AND l.status='active' AND e.active AND e.starts_at>now()+interval '45 minutes'
-        AND ($2='demo' OR s.stripe_ready)
+        AND ${sellerReady("$2")}
       FOR UPDATE OF l`, [listing, mode]);
-    if (!item) throw new ActionError("This listing is currently unavailable.");
-    if (item.seller_id === buyer) throw new ActionError("You cannot buy from your own listing.");
+    if (!item) throw new ActionError("err.listingUnavailable");
+    if (item.seller_id === buyer) throw new ActionError("err.ownListing");
     const { rows: [existing] } = await client.query<{ id: string }>(`
       SELECT id FROM orders WHERE listing_id=$1 AND buyer_id=$2 AND status='reserved'
-      AND (expires_at>now() AND (payment_mode='demo' OR checkout_attempted OR expires_at>now()+interval '30 minutes')) ORDER BY created_at DESC LIMIT 1`, [listing, buyer]);
+      AND (expires_at>now() AND (payment_mode<>'stripe' OR checkout_attempted OR expires_at>now()+interval '30 minutes')) ORDER BY created_at DESC LIMIT 1`, [listing, buyer]);
     if (existing) return existing.id;
     const update = await client.query("UPDATE listings SET available=available-$2 WHERE id=$1 AND available>=$2", [listing, quantity]);
-    if (!update.rowCount) throw new ActionError("There aren’t enough tickets. Try a smaller quantity.");
+    if (!update.rowCount) throw new ActionError("err.notEnough");
     const subtotal = item.price * quantity;
     const { rows: [order] } = await client.query<{ id: string }>(`
       INSERT INTO orders (listing_id,buyer_id,quantity,subtotal,buyer_bps,seller_bps,buyer_fee,seller_fee,payment_mode,expires_at)
@@ -66,13 +86,42 @@ export async function release(client: PoolClient, order: Order, status: "expired
 }
 
 export async function confirmDemo(id: string, buyer: string) {
-  if (paymentMode() !== "demo") throw new ActionError("Demo payments are disabled.");
+  if (paymentMode() !== "demo") throw new ActionError("err.demoDisabled");
   await tx(async (client) => {
     const order = await orderById(id, client);
     if (!order || order.buyer_id !== buyer || order.status !== "reserved" || order.payment_mode !== "demo") {
-      throw new ActionError("This order cannot be paid.");
+      throw new ActionError("err.cannotPay");
     }
     if (order.expires_at.getTime() <= Date.now()) return release(client, order);
     await client.query("UPDATE orders SET status='paid',paid_at=now() WHERE id=$1", [id]);
+  });
+}
+
+/** Manual mode: the buyer uploads a transfer receipt; inventory stays held until an operator verifies it. */
+export function submitReceipt(id: string, buyer: string, image: Buffer) {
+  return tx(async (client) => {
+    const order = await orderById(id, client);
+    if (!order || order.buyer_id !== buyer || order.payment_mode !== "manual" || order.status !== "reserved") {
+      throw new ActionError("err.cannotUpload");
+    }
+    if (order.expires_at.getTime() <= Date.now()) {
+      await release(client, order);
+      return false;
+    }
+    await client.query("UPDATE orders SET status='verifying',receipt_file=$2,receipt_at=now(),reject_reason=NULL WHERE id=$1", [id, image]);
+    return true;
+  });
+}
+
+export function verifyManualPayment(id: string, approve: boolean, note: string) {
+  return tx(async (client) => {
+    const order = await orderById(id, client);
+    if (!order || order.payment_mode !== "manual" || order.status !== "verifying") throw new ActionError("err.notVerifying");
+    if (approve) {
+      await client.query("UPDATE orders SET status='paid',paid_at=now(),payment_ref=$2 WHERE id=$1", [id, note || null]);
+    } else {
+      await client.query("UPDATE orders SET status='cancelled',reject_reason=$2 WHERE id=$1", [id, note]);
+      await client.query("UPDATE listings SET available=available+$2 WHERE id=$1", [order.listing_id, order.quantity]);
+    }
   });
 }

@@ -1,11 +1,11 @@
 import type { NextConfig } from "next";
 
 const config: NextConfig = {
-  output: process.env.SETLIST_DOCKER_BUILD === "1" ? "standalone" : undefined,
+  output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
   poweredByHeader: false,
   devIndicators: false,
   agentRules: false,
-  experimental: { serverActions: { bodySizeLimit: "3mb" } },
+  experimental: { serverActions: { bodySizeLimit: "9mb" } },
   async headers() {
     return [{
       source: "/:path*",

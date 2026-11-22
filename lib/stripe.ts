@@ -34,14 +34,14 @@ function createSession(order: Order) {
 }
 
 export async function checkout(id: string, buyerId: string) {
-  if (paymentMode() !== "stripe") throw new ActionError("Stripe checkout is unavailable.");
+  if (paymentMode() !== "stripe") throw new ActionError("err.stripeUnavailable");
   const [claimed] = await query(`UPDATE orders SET checkout_attempted=true
     WHERE id=$1 AND buyer_id=$2 AND payment_mode='stripe' AND status='reserved' AND
       (checkout_id IS NOT NULL OR expires_at>now()+interval '30 minutes') RETURNING id`, [id, buyerId]);
-  if (!claimed) throw new ActionError("This checkout is unavailable or has expired.");
+  if (!claimed) throw new ActionError("err.checkoutExpired");
   return tx(async (client) => {
     const order = await orderById(id, client);
-    if (!order || order.status !== "reserved" || order.buyer_id !== buyerId) throw new ActionError("This checkout is unavailable.");
+    if (!order || order.status !== "reserved" || order.buyer_id !== buyerId) throw new ActionError("err.checkoutExpired");
     const session = order.checkout_id
       ? await stripeClient().checkout.sessions.retrieve(order.checkout_id)
       : await createSession(order);
@@ -57,9 +57,9 @@ export async function checkout(id: string, buyerId: string) {
 export async function cancelReservation(id: string, buyer: string) {
   return tx(async (client) => {
     const order = await orderById(id, client);
-    if (!order || order.buyer_id !== buyer || order.status !== "reserved") throw new ActionError("This reservation cannot be cancelled.");
+    if (!order || order.buyer_id !== buyer || order.status !== "reserved") throw new ActionError("err.cannotCancel");
     if (order.payment_mode === "stripe" && order.checkout_attempted) {
-      if (!order.checkout_id) throw new ActionError("We’re verifying the Stripe session. Check this order again shortly.");
+      if (!order.checkout_id) throw new ActionError("err.verifyingStripe");
       const stripe = stripeClient();
       const session = await stripe.checkout.sessions.retrieve(order.checkout_id);
       if (session.status === "complete") {
@@ -147,16 +147,22 @@ async function recordRefund(client: PoolClient, refund: Stripe.Refund) {
   }
 }
 
-export async function approveRefund(id: string) {
+export async function approveRefund(id: string, reference = "") {
   return tx(async (client) => {
     const order = await orderById(id, client);
-    if (!order || order.status !== "refund_requested" || order.settled_at) throw new ActionError("This refund needs manual review.");
+    if (!order || order.status !== "refund_requested" || order.settled_at) throw new ActionError("err.refundManual");
+    if (order.payment_mode === "manual") {
+      // The operator sends the refund by bank transfer / DuitNow and records its reference.
+      if (reference.length < 2) throw new ActionError("err.refundRef");
+      await client.query("UPDATE orders SET status='refunded',refund_ref=$2 WHERE id=$1", [id, reference]);
+      return;
+    }
     if (order.payment_mode === "demo") {
-      if (paymentMode() !== "demo") throw new ActionError("Demo payments are disabled.");
+      if (paymentMode() !== "demo") throw new ActionError("err.demoDisabled");
       await client.query("UPDATE orders SET status='refunded' WHERE id=$1", [id]);
       return;
     }
-    if (!order.payment_intent) throw new ActionError("The original payment is missing.");
+    if (!order.payment_intent) throw new ActionError("err.paymentMissing");
     const refund = await stripeClient().refunds.create({
       payment_intent: order.payment_intent, amount: order.subtotal + order.buyer_fee, metadata: { order_id: id },
     }, { idempotencyKey: `refund-${id}-${order.refund_attempt}` });
@@ -165,23 +171,30 @@ export async function approveRefund(id: string) {
   });
 }
 
-export async function settle(id: string) {
+export async function settle(id: string, reference = "") {
   return tx(async (client) => {
     const order = await orderById(id, client);
     if (!order || order.status !== "confirmed" || order.settled_at || order.starts_at.getTime() + 86400000 > Date.now()) {
-      throw new ActionError("This order is eligible after receipt is confirmed and 24 hours have passed since the event began.");
+      throw new ActionError("err.settleWindow");
+    }
+    if (order.payment_mode === "manual") {
+      // The operator pays the seller's payout account and records the transfer reference.
+      if (!order.payout_account) throw new ActionError("err.payoutMissing");
+      if (reference.length < 2) throw new ActionError("err.payoutRef");
+      await client.query("UPDATE orders SET settled_at=now(),payout_ref=$2 WHERE id=$1", [id, reference]);
+      return;
     }
     if (order.payment_mode === "demo") {
-      if (paymentMode() !== "demo") throw new ActionError("Demo payments are disabled.");
+      if (paymentMode() !== "demo") throw new ActionError("err.demoDisabled");
       await client.query("UPDATE orders SET settled_at=now() WHERE id=$1", [id]);
       return;
     }
-    if (!order.charge_id || !order.stripe_account) throw new ActionError("The seller or payment is missing Stripe details.");
+    if (!order.charge_id || !order.stripe_account) throw new ActionError("err.stripeDetails");
     const stripe = stripeClient();
     const charge = await stripe.charges.retrieve(order.charge_id, { expand: ["balance_transaction"] });
-    if (charge.disputed || charge.amount_refunded > 0) throw new ActionError("This payment needs manual review.");
+    if (charge.disputed || charge.amount_refunded > 0) throw new ActionError("err.manualReview");
     const balance = charge.balance_transaction;
-    if (!balance || typeof balance === "string" || balance.currency !== "myr") throw new ActionError("A MYR balance transaction is required.");
+    if (!balance || typeof balance === "string" || balance.currency !== "myr") throw new ActionError("err.myrBalance");
     const transfer = await stripe.transfers.create({
       amount: order.subtotal - order.seller_fee, currency: "myr", destination: order.stripe_account,
       source_transaction: order.charge_id, transfer_group: order.id, metadata: { order_id: id },
@@ -206,7 +219,7 @@ export async function reconcile() {
   await query("DELETE FROM auth_limits WHERE window_start<now()-interval '1 day'");
   const items = await query<{ id: string }>(`SELECT id FROM orders
     WHERE (status='reserved' AND (
-      (payment_mode='demo' AND expires_at<=now()) OR
+      (payment_mode IN ('demo','manual') AND expires_at<=now()) OR
       (payment_mode='stripe' AND NOT checkout_attempted AND expires_at<=now()+interval '30 minutes') OR
       (payment_mode='stripe' AND checkout_attempted AND expires_at<=now()-interval '2 minutes')
     )) OR (status='refund_pending' AND refund_id IS NOT NULL)
@@ -228,7 +241,7 @@ export async function reconcile() {
           return;
         }
         if (expiry > Date.now()) return;
-        if (order.payment_mode === "demo") {
+        if (order.payment_mode !== "stripe") {
           await release(client, order);
           return;
         }

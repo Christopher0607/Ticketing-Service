@@ -33,12 +33,20 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run typecheck
       - run: npm run db:migrate && npm run db:seed
       - run: npx playwright install --with-deps chromium
-      - run: |
-          npm run start > /tmp/setlist-ci.log 2>&1 &
-          trap 'kill $!' EXIT
+      - name: Browser tests (demo mode on :3000, manual DuitNow mode on :3002)
+        env:
+          MANUAL_BASE_URL: http://localhost:3002
+        run: |
+          npm run start > /tmp/demo-ci.log 2>&1 &
+          DEMO=$!
+          PAYMENT_MODE=manual APP_URL=http://localhost:3002 npm run start -- --port 3002 > /tmp/manual-ci.log 2>&1 &
+          MANUAL=$!
+          trap 'kill $DEMO $MANUAL' EXIT
           curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3000/ -o /dev/null
+          curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3002/ -o /dev/null
           npm run test:e2e
       - name: Verify signed Stripe events with local fixtures
         env:
@@ -47,7 +55,7 @@ jobs:
           STRIPE_SECRET_KEY: sk_test_fixture
           STRIPE_WEBHOOK_SECRET: whsec_local_fixture
         run: |
-          npm run start -- --port 3001 > /tmp/setlist-stripe-ci.log 2>&1 &
+          npm run start -- --port 3001 > /tmp/stripe-ci.log 2>&1 &
           trap 'kill $!' EXIT
           curl --fail --retry 30 --retry-connrefused --retry-delay 1 http://localhost:3001/ -o /dev/null
           npm run test:webhook

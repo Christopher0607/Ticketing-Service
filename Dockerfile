@@ -6,7 +6,7 @@ RUN --mount=type=secret,id=npm_ca \
     if [ -f /run/secrets/npm_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/npm_ca; fi \
     && npm ci
 COPY . .
-RUN SETLIST_DOCKER_BUILD=1 npm run build \
+RUN DOCKER_BUILD=1 npm run build \
     && mkdir -p .next/standalone/.next .next/standalone/scripts \
     && cp -r .next/static .next/standalone/.next/static \
     && cp -r public db .next/standalone/ \

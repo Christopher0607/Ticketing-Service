@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
-const password = "SetlistDemo2027!";
+const password = "CrazyMonkey2027!";
 const dbUrl = process.env.DATABASE_URL ?? "postgresql://ticketing:ticketing@127.0.0.1:5442/ticketing";
 const safeDb = new URL(dbUrl);
 if (!["localhost","127.0.0.1"].includes(safeDb.hostname)) throw new Error("Use a local demo database for tests.");
@@ -18,7 +18,7 @@ test("mobile catalogue works without horizontal page overflow", async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByText(/Local demo/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Good nights/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Real tickets/ })).toBeVisible();
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth === innerWidth);
   expect(await fits()).toBe(true);
   await page.getByRole("textbox", { name: /Search events/ }).fill("basketball");
@@ -28,6 +28,23 @@ test("mobile catalogue works without horizontal page overflow", async ({ page })
   await page.getByRole("link", { name: /KL Basketball Finals/ }).click();
   await expect(page.getByRole("button", { name: "Select tickets" })).toBeVisible();
   expect(await fits()).toBe(true);
+});
+
+test("Chinese is the default for Chinese browsers and the language toggle remembers English", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, locale: "zh-CN" });
+  const page = await context.newPage();
+  await page.goto("/events");
+  await expect(page.getByRole("heading", { name: "探索活动" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hans-MY");
+  await page.getByRole("link", { name: "切换语言" }).click();
+  await expect(page).toHaveURL(/\/events$/);
+  await expect(page.getByRole("heading", { name: "Explore events" })).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /Real tickets/ })).toBeVisible();
+  await page.goto("/account?error=Call%20this%20number");
+  await expect(page.locator(".notice.error")).toHaveText("We couldn’t complete that action. Please try again.");
+  await expect(page.getByText("Call this number")).toHaveCount(0);
+  await context.close();
 });
 
 test("admin, sellers and buyers can complete protected orders, refunds and settlement", async ({ browser, baseURL, page }) => {
@@ -54,7 +71,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(rival.getByRole("heading", { name: "My account" })).toBeVisible();
     rivalId = (await db.query("SELECT id FROM users WHERE email=$1", [rivalEmail])).rows[0].id;
 
-    await admin.goto("/admin");
+    await admin.goto("/admin?tab=events");
     await admin.getByLabel("Event name").fill(label);
     await admin.getByLabel("Venue").fill("Test Hall");
     await admin.getByLabel("City").fill("Kuala Lumpur");
@@ -71,6 +88,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await seller.goto("/sell");
     await seller.getByLabel("Event", { exact: true }).selectOption(eventId!);
     await seller.getByLabel("Seat or ticket section").fill("QA Balcony");
+    await seller.getByLabel("Face value per ticket (RM)").fill("100");
     await seller.getByLabel("Price per ticket (RM)").fill("100");
     await seller.getByLabel("Proof of ticket ownership").fill("Private provider order example reference");
     await seller.getByLabel("Redacted proof file (optional)").setInputFiles({
@@ -80,7 +98,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(seller.getByText("Listing sent for review.")).toBeVisible();
     await buyer.goto(eventPath);
     await expect(buyer.getByText("No tickets available")).toBeVisible();
-    await admin.reload();
+    await admin.goto("/admin");
     const review = admin.locator(".admin-listing").filter({ hasText: label });
     await review.getByText("View ownership proof").click();
     const proof = (await review.getByRole("link", { name: "Download proof file" }).getAttribute("href"))!;
@@ -103,6 +121,7 @@ test("admin, sellers and buyers can complete protected orders, refunds and settl
     await expect(winner.getByRole("heading", { name: "Checkout" })).toBeVisible();
     await expect(winner.getByText("RM103", { exact: true })).toBeVisible();
 
+    await admin.goto("/admin?tab=settings");
     await admin.getByLabel("Buyer fee (%)").fill("4.00");
     await admin.getByLabel("Seller fee (%)").fill("6.00");
     await admin.getByRole("button", { name: "Save rates" }).click();

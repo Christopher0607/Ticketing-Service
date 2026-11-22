@@ -1,0 +1,68 @@
+# One-VPS production stack: app + PostgreSQL + Caddy (automatic HTTPS) + reconcile job + daily backups.
+# Usage: cp .env.production.example .env.production && edit it, then `docker compose --env-file .env.production up -d --build`.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ticketing
+      POSTGRES_DB: ticketing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketing -d ticketing"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://ticketing:${POSTGRES_PASSWORD}@db:5432/ticketing
+    # Apply database migrations, then serve.
+    command: ["sh", "-c", "node scripts/database.mjs migrate && node server.js"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.production}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+
+  # Releases expired reservations and checks pending payments every minute.
+  reconcile:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    environment:
+      JOB_SECRET: ${JOB_SECRET:?Set JOB_SECRET in .env.production}
+    entrypoint: ["sh", "-c", "while true; do curl -fsS -X POST http://app:3000/api/jobs/reconcile -H \"Authorization: Bearer $$JOB_SECRET\" >/dev/null || echo reconcile failed; sleep 60; done"]
+    depends_on: [app]
+
+  # Nightly compressed database dump into ./backups, keeping the last 14 days. Copy these off the server too.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["sh", "-c", "while true; do pg_dump -h db -U ticketing ticketing | gzip > /backups/ticketing-$$(date +%F).sql.gz; ls -1t /backups/*.sql.gz | tail -n +15 | xargs -r rm --; sleep 86400; done"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -1,18 +1,34 @@
-# Setlist
+# Crazy Monkey 票务 · Ticketing Service
 
-Setlist is a Malaysia-focused secondary marketplace for live event tickets. Sellers list tickets they already hold and set their price. Buyers see the service fee before payment. The marketplace charges 3% to each side by default, with independently adjustable rates and a snapshot on every order.
+马来西亚粉丝之间的**门票转让平台**。持票人（不一定是主办方）把手上的票挂出来，自己定价；平台不赚差价，只向买卖双方收透明服务费（默认买家 3% + 卖家 3%，后台随时可调，每张订单会记录下单当时的费率）。
 
-## Run locally
+> 同公司的 [crazy-monkey](https://github.com/Christopher0607/crazy-monkey) 项目是**演唱会团购**（开票前收定金、帮抢票）。这里是**二手转让市场**。两边共用黑金品牌，设置 `GROUPBUY_URL` 后网站导航会链接到团购站。
 
-Use Node.js 24. You can use your own PostgreSQL 16+ database or start the embedded local database as a regular, non-root user.
+## 核心功能
+
+| | |
+| --- | --- |
+| 托管付款 | 买家付款给平台 → 卖家官方转票 → 买家确认收到 → 活动开始 24 小时后才结算给卖家；出问题可退款 |
+| 三种付款方式 | `manual`：DuitNow QR / 银行转账 + 上传付款截图，后台人工核对（零手续费，建议先用这个上线）<br>`stripe`：信用卡 / FPX，Stripe Connect 自动打款（需 Stripe 批准）<br>`demo`：本地演示 |
+| 防超卖 | 下单即锁票 45 分钟（PostgreSQL 行锁），超时自动释放 |
+| 原价透明 | 卖家必须填写票面原价，买家看到“原价 RM168 · 比原价 +12.5%”；后台可设最高加价（例如 0% = 只能原价卖），为马来西亚可能出台的反黄牛法预留 |
+| 人工审核 | 卖家申请（含 WhatsApp 号码）、挂单购票证明、付款截图都由管理员审核 |
+| 活动海报 | 后台上传海报，自动压缩为 WebP 存进数据库，带长期缓存（不需要另买存储） |
+| 中英双语 | 按浏览器语言自动选择，右上角一键切换 |
+| 手机体验 | 底部导航栏，可“添加到主屏幕”当 App 用（PWA），不用上架 App Store |
+| 管理后台 | 成交额 / 佣金统计、待核对付款、待结算、退款申请、卖家申请、挂单审核、活动管理、费率和收款信息设置 |
+
+## 本地运行
+
+需要 Node.js 22.13+ 和 PostgreSQL 16+（也可以用自带的嵌入式数据库，需非 root 用户）。
 
 ```sh
 npm ci
 cp .env.example .env.local
-npm run db:local
+npm run db:local        # 可选：启动嵌入式 PostgreSQL（端口 5442）
 ```
 
-In a second terminal:
+另开一个终端：
 
 ```sh
 npm run db:migrate
@@ -20,65 +36,92 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). These accounts use the password `SetlistDemo2027!` and are only created by the local seed command.
+打开 http://localhost:3000 。演示账号密码都是 `CrazyMonkey2027!`（仅本地 seed 会创建）：
 
-| Account | Email |
+| 角色 | 邮箱 |
 | --- | --- |
-| Buyer | `buyer@example.test` |
-| Seller | `seller@example.test` |
-| Administrator | `admin@example.test` |
+| 买家 | `buyer@example.test` |
+| 卖家 | `seller@example.test` |
+| 管理员 | `admin@example.test` |
 
-Demo events are fictional, with illustrative photography. The checkout records a simulated payment. To run the inventory reconciliation job locally:
+想体验 DuitNow 人工付款流程，把 `.env.local` 里的 `PAYMENT_MODE` 改成 `manual` 再启动。
 
-```sh
-curl -fsS -X POST http://localhost:3000/api/jobs/reconcile \
-  -H 'Authorization: Bearer local-demo-reconcile'
-```
-
-## Verification
+## 测试
 
 ```sh
-npm test
+npm test                 # 单元测试（费率、日期、翻译完整性）
 npm run typecheck
 npm run build
 npx playwright install chromium
-npm run test:e2e
+npm run start &          # demo 模式，端口 3000
+PAYMENT_MODE=manual npm run start -- --port 3002 &
+MANUAL_BASE_URL=http://localhost:3002 npm run test:e2e
 ```
 
-The browser suite expects the seeded demo server and database. It changes test records and removes them when complete. Use a dedicated local database for automated tests. Set `CHROMIUM_PATH` to use an existing Chromium installation.
+浏览器测试覆盖：抢票并发防超卖、费率快照、转票、确认、退款、结算、预留过期释放、中英切换，以及 DuitNow 全流程（海报上传、加价上限、付款截图隐私、核对 / 拒绝、人工退款、人工打款）。请使用专门的本地测试数据库。
 
-## Deploying on a VPS or with Supabase
+## 上线部署（一台 VPS，最省钱）
 
-The application needs a Node.js host even when PostgreSQL is on Supabase. On a VPS, you can run the included Docker image or use `npm ci && npm run build && npm start` behind an HTTPS reverse proxy. Set the proxy to overwrite forwarded host, protocol and `X-Real-IP` headers. Give the app a dedicated database, keep its credentials server-side, and configure backups. With Supabase, use a direct or session-pooled PostgreSQL connection from the server, with TLS and the appropriate network connectivity for your host. The application uses PostgreSQL transactions and SQL migrations directly through `pg`.
+整套服务（网站 + 数据库 + 自动 HTTPS + 定时任务 + 每日备份）用一个 `docker compose` 跑在一台 VPS 上。
 
-Set the production variables listed in [.env.example](.env.example). Run `npm run db:migrate` as a release task, then provision your administrator with `npm run db:admin`. Remove the bootstrap password from the deployment environment after provisioning. Use a verified Resend sender identity to enable signup verification and account recovery. Add a regular authenticated `POST /api/jobs/reconcile` invocation, such as once a minute, using a random secret of at least 32 characters. Alert on nonzero reconciliation failures and monitor failed webhooks.
+1. **买 VPS**：2 vCPU / 2–4 GB 内存 / Ubuntu 24.04 就够用。选新加坡机房延迟最低。装好 Docker。
+2. **买域名**，在域名商（或免费的 Cloudflare DNS）把 `@` 和 `www` 的 A 记录指向 VPS IP。
+3. 在服务器上：
 
-## Payments and transfers
+   ```sh
+   git clone https://github.com/Christopher0607/Ticketing-Service.git && cd Ticketing-Service
+   cp .env.production.example .env.production
+   nano .env.production     # 填 DOMAIN、APP_URL、POSTGRES_PASSWORD、JOB_SECRET 等
+   docker compose --env-file .env.production up -d --build
+   # 创建第一个管理员（先在 .env.production 填 ADMIN_EMAIL / ADMIN_PASSWORD，建完后删掉）
+   docker compose --env-file .env.production run --rm app node scripts/database.mjs admin
+   ```
 
-Configure an approved Malaysia Stripe Connect account that supports separate charges and transfers with the platform bearing payment fees and loss liability. Confirm with Stripe that it accepts the intended ticket resale business and seller account types before operating. Keep sandbox and live credentials, webhooks and databases separate.
+4. 用管理员登录 → **后台 → 设置**：填收款银行、户名、账号、DuitNow ID，上传 DuitNow 收款码 → **活动** 里发布活动、上传海报。
+5. 用手机走一遍：注册 → 申请卖家 → 挂票 → 另一个账号买票 → 上传截图 → 后台确认收款。
 
-1. Set `PAYMENT_MODE=stripe`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`. Stripe Checkout accepts cards. Set `STRIPE_ENABLE_FPX=true` when Stripe enables FPX for your platform.
-2. Subscribe the platform destination `POST /api/stripe/webhook` to `payment_intent.succeeded`, `checkout.session.expired`, `checkout.session.async_payment_failed`, `refund.created`, `refund.updated`, `refund.failed`, `charge.dispute.created` and `charge.dispute.closed`.
-3. Configure a connected-account webhook at `POST /api/stripe/connect` for `account.updated` and set its independent signing secret in `STRIPE_CONNECT_WEBHOOK_SECRET`. Sellers must complete onboarding and have active transfers and payouts before their listings can be purchased.
-4. Publish only events whose original ticket terms permit the intended resale and transfer. Approve sellers and review listing proof. The seller transfers through the original provider and records the transfer in Setlist.
-5. An administrator can approve refunds or settle the seller’s proceeds after receipt confirmation and the 24-hour post-start window. Support may confirm a delivered order from documented evidence after that same window. Settlements are Stripe transfers to the connected account. The provider’s own schedule controls bank payouts.
+Caddy 会自动申请和续期 HTTPS 证书。数据库每天备份到 `./backups`（保留 14 天），请定期复制到别处（例如 Cloudflare R2 免费额度）。更新代码：`git pull && docker compose --env-file .env.production up -d --build`。
 
-The administration interface supports pre-settlement refunds. Handle post-settlement refunds, late chargebacks and transfer reversals in the Stripe Dashboard and keep the provider records for reconciliation. Use Stripe sandbox before enabling live transactions, including an FPX payment and refund, a seller onboarding, and an actual sandbox transfer. Production operators should publish their terms, privacy notice, seller settlement policy and support contacts for their business.
+### 每月成本估算
 
-The image fixtures use [Unsplash](https://unsplash.com/license) photos. Manrope and Space Grotesk are distributed under the [SIL Open Font License](public/fonts/manrope-OFL.txt).
+| 项目 | 费用 |
+| --- | --- |
+| VPS（2 vCPU / 4 GB） | 约 RM20–45 / 月 |
+| 域名 `.com` | 约 RM50–70 / 年（`.my` 约 RM100+ / 年） |
+| HTTPS 证书（Caddy / Let’s Encrypt） | 免费 |
+| 邮件 Resend | 免费额度起步 |
+| 付款 `manual` 模式 | 无手续费（只有银行本身的费用） |
+| 付款 Stripe（卡 / FPX） | 约 3% + RM1 / 笔，以 [Stripe 官网](https://stripe.com/en-my/pricing) 为准 |
 
-Set `SUPPORT_EMAIL`, `TERMS_URL` and `PRIVACY_URL` to display your support channel and policies in the storefront.
+合计起步约 **RM25–50 / 月**。和团购站合用同一台 VPS 还能再省。
 
-For a signed webhook regression test using the locally seeded database and no Stripe network calls, run the built server separately:
+> 注意：如果用 Stripe，手续费约 3% + RM1 会吃掉一半佣金（买家 3% + 卖家 3% = 6%）。这就是建议先用 `manual` 上线的原因，等量起来再加 Stripe。
+
+## 上线前清单
+
+- [ ] **Stripe 审批**：门票转售属于需要审核的高风险类别，开 `stripe` 模式前先联系 Stripe 确认接受你的业务和卖家类型，并在沙盒测试 FPX 付款、退款、卖家开户和转账。
+- [ ] **服务条款、隐私政策（PDPA）、退款规则**：写好后把链接填到 `TERMS_URL` / `PRIVACY_URL`。
+- [ ] **只上架允许转让的活动**：很多主办方是实名制或禁止加价转售，发布活动时填写官方转让政策链接。马来西亚政府正在研拟反黄牛法，可以先在后台设置“最高加价”。
+- [ ] **人工收款资金**：`manual` 模式下钱先进公司账户，再由你转给卖家；建议用独立公司户口并做好对账，规模大了请咨询会计 / 律师关于代收款的合规要求。
+- [ ] 配置 Resend 发件域名（注册验证和找回密码需要）。
+- [ ] 设置 `SUPPORT_WHATSAPP` 客服号码。
+
+## Stripe 模式说明
+
+1. 设置 `PAYMENT_MODE=stripe`、`STRIPE_SECRET_KEY`、`STRIPE_WEBHOOK_SECRET`。Stripe 开通 FPX 后设 `STRIPE_ENABLE_FPX=true`。
+2. 平台 webhook `POST /api/stripe/webhook` 订阅：`payment_intent.succeeded`、`checkout.session.expired`、`checkout.session.async_payment_failed`、`refund.created`、`refund.updated`、`refund.failed`、`charge.dispute.created`、`charge.dispute.closed`。
+3. Connect webhook `POST /api/stripe/connect` 订阅 `account.updated`，签名密钥填 `STRIPE_CONNECT_WEBHOOK_SECRET`。卖家完成 Stripe 开户后挂单才可购买。
+4. 结算 = 从平台余额转账到卖家的 Connect 账户；结算后的退款、拒付请在 Stripe 后台处理。
+
+本地签名 webhook 回归测试（不访问 Stripe 网络）：
 
 ```sh
-PAYMENT_MODE=stripe APP_URL=http://localhost:3001 \
-STRIPE_SECRET_KEY=sk_test_fixture STRIPE_WEBHOOK_SECRET=whsec_local_fixture \
-npm run start -- --port 3001
-```
-
-Then run:
-
-```sh
+PAYMENT_MODE=stripe APP_URL=http://localhost:3001 STRIPE_SECRET_KEY=sk_test_fixture STRIPE_WEBHOOK_SECRET=whsec_local_fixture npm run start -- --port 3001
 STRIPE_SECRET_KEY=sk_test_fixture STRIPE_WEBHOOK_SECRET=whsec_local_fixture npm run test:webhook
 ```
+
+## 技术栈
+
+Next.js 16（App Router、Server Actions）· TypeScript · PostgreSQL（`pg`，SQL 迁移在 `db/`）· sharp（图片处理）· Stripe · Resend · Docker + Caddy。没有用 Prisma / Redis / 对象存储，以减少要维护和付费的服务。
+
+示例图片来自 [Unsplash](https://unsplash.com/license)。Manrope 和 Oswald 字体使用 [SIL Open Font License](public/fonts/oswald-OFL.txt)。

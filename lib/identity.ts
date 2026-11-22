@@ -10,7 +10,7 @@ const format = /^[a-f0-9]{64}$/;
 export const mailConfigured = () => Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
 
 export async function sendAccountLink(user: { id: string; email: string }, purpose: Purpose) {
-  if (!mailConfigured()) throw new ActionError("Account email is temporarily unavailable.");
+  if (!mailConfigured()) throw new ActionError("err.emailUnavailable");
   const token = randomBytes(32).toString("hex");
   const hashed = digest(token);
   await query(`INSERT INTO email_tokens (token_hash,user_id,purpose,expires_at)
@@ -25,8 +25,10 @@ export async function sendAccountLink(user: { id: string; email: string }, purpo
       signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
         from: process.env.MAIL_FROM, to: [user.email],
-        subject: reset ? "Reset your Setlist password" : "Verify your Setlist email",
-        text: `${reset ? "Reset your password" : "Verify your email address"} using this link:\n${link}\n\nThe link expires in 30 minutes.`,
+        subject: reset ? "Crazy Monkey 票务 · 重设密码 / Reset your password" : "Crazy Monkey 票务 · 验证邮箱 / Verify your email",
+        text: reset
+          ? `请用以下链接重设密码（30 分钟内有效）：\nReset your password using this link (expires in 30 minutes):\n\n${link}`
+          : `请用以下链接验证邮箱（30 分钟内有效）：\nVerify your email address using this link (expires in 30 minutes):\n\n${link}`,
       }),
     });
     if (!response.ok) throw new Error(`Account email provider response ${response.status}`);
@@ -37,15 +39,15 @@ export async function sendAccountLink(user: { id: string; email: string }, purpo
 }
 
 export async function consumeAccountLink(token: string, purpose: Purpose, password?: string) {
-  if (!format.test(token)) throw new ActionError("This link has expired or was already used.");
+  if (!format.test(token)) throw new ActionError("err.linkExpired");
   const hash = password ? passwordHash(password) : null;
   await tx(async (client) => {
     const { rows: [hit] } = await client.query<{ user_id: string }>(
       "SELECT user_id FROM email_tokens WHERE token_hash=$1 AND purpose=$2 AND expires_at>now()", [digest(token), purpose]);
-    if (!hit) throw new ActionError("This link has expired or was already used.");
+    if (!hit) throw new ActionError("err.linkExpired");
     await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [hit.user_id]);
     const { rowCount } = await client.query("DELETE FROM email_tokens WHERE token_hash=$1 AND user_id=$2 AND expires_at>now()", [digest(token), hit.user_id]);
-    if (!rowCount) throw new ActionError("This link has expired or was already used.");
+    if (!rowCount) throw new ActionError("err.linkExpired");
     if (purpose === "verify") {
       await client.query("UPDATE users SET email_verified=true WHERE id=$1", [hit.user_id]);
     } else {
