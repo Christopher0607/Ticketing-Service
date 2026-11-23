@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { appUrl } from "./config";
+import { appUrl, site } from "./config";
 import { query, tx } from "./db";
 import { ActionError } from "./orders";
 import { passwordHash } from "./auth";
@@ -8,6 +8,8 @@ type Purpose = "verify" | "reset";
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
 const format = /^[a-f0-9]{64}$/;
 export const mailConfigured = () => Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
+/** Replies to system emails go to the support inbox (MAIL_FROM is a no-reply sender address). */
+export const replyTo = () => { const email = site.supportEmail(); return email ? { reply_to: email } : {}; };
 
 export async function sendAccountLink(user: { id: string; email: string }, purpose: Purpose) {
   if (!mailConfigured()) throw new ActionError("err.emailUnavailable");
@@ -24,7 +26,7 @@ export async function sendAccountLink(user: { id: string; email: string }, purpo
       },
       signal: AbortSignal.timeout(8000),
       body: JSON.stringify({
-        from: process.env.MAIL_FROM, to: [user.email],
+        from: process.env.MAIL_FROM, to: [user.email], ...replyTo(),
         subject: reset ? "Crazy Monkey 票务 · 重设密码 / Reset your password" : "Crazy Monkey 票务 · 验证邮箱 / Verify your email",
         text: reset
           ? `请用以下链接重设密码（30 分钟内有效）：\nReset your password using this link (expires in 30 minutes):\n\n${link}`

@@ -1,6 +1,6 @@
 import { query } from "./db";
 import { money, shortId } from "./format";
-import { mailConfigured } from "./identity";
+import { mailConfigured, replyTo } from "./identity";
 
 /**
  * Transactional emails (bilingual). Best effort: a failed email is logged and never blocks
@@ -19,7 +19,7 @@ export async function sendEmail(to: string | null | undefined, subject: string, 
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(6000),
       body: JSON.stringify({
-        from: process.env.MAIL_FROM, to: [to], subject: `Crazy Monkey 票务 · ${subject}`,
+        from: process.env.MAIL_FROM, to: [to], ...replyTo(), subject: `Crazy Monkey 票务 · ${subject}`,
         text: [...lines, "", "—", "Crazy Monkey Tickets · 马来西亚安心门票转让平台", site()].join("\n"),
       }),
     });
