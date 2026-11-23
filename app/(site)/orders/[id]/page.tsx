@@ -13,8 +13,7 @@ type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ error?: 
 export default async function BuyerOrder({ params, searchParams }: Props) {
   const [{ id }, notice, { t }] = await Promise.all([params, searchParams, i18n()]);
   if (!uuid.test(id)) notFound();
-  const user = await requireUser(`/orders/${id}`);
-  const order = await orderById(id);
+  const [user, order] = await Promise.all([requireUser(`/orders/${id}`), orderById(id)]);
   if (!order) notFound();
   if (order.buyer_id !== user.id) {
     if (order.seller_id === user.id) redirect(`/sell/orders/${id}`);

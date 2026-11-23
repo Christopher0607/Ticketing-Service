@@ -110,6 +110,14 @@ export async function releaseExpired(client?: PoolClient) {
   else await query(sql);
 }
 
+const sweep = globalThis as typeof globalThis & { lastReleaseSweep?: number };
+/** For page views: releases expired holds at most every 20 seconds per server instance. */
+export async function releaseExpiredSoon() {
+  if (Date.now() - (sweep.lastReleaseSweep ?? 0) < 20000) return;
+  sweep.lastReleaseSweep = Date.now();
+  await releaseExpired().catch((error) => { sweep.lastReleaseSweep = 0; throw error; });
+}
+
 export async function release(client: PoolClient, order: Order, status: "expired" | "cancelled" = "expired") {
   const changed = await client.query("UPDATE orders SET status=$2 WHERE id=$1 AND status='reserved' RETURNING listing_id", [order.id, status]);
   if (changed.rowCount) await client.query("UPDATE listings SET available=available+$2 WHERE id=$1", [order.listing_id, order.quantity]);

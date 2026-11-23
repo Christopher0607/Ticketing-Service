@@ -867,3 +867,19 @@ a.dashboard-row:hover{border-color:#d4af3777}
 
 /* Hosting provider badge (Netlify free plan): never visible, never clickable, takes no space. */
 #nl-badge-frame,#nl-hud-frame,iframe[id^="nl-"],iframe[title*="Netlify" i],iframe[srcdoc*="netlify" i]{display:none!important;visibility:hidden!important;pointer-events:none!important;width:0!important;height:0!important;opacity:0!important;clip-path:inset(50%)!important}
+
+/* Loading placeholders */
+.skeleton{display:block;border-radius:14px;background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(212,175,55,.13) 50%,rgba(255,255,255,.04) 70%);background-size:300% 100%;animation:sk-shimmer 1.3s ease-in-out infinite}
+@keyframes sk-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.skeleton{animation:none}}
+.skeleton-page{padding-top:28px;padding-bottom:48px}
+.skeleton-heading{display:grid;gap:12px;margin-bottom:28px}
+.sk-title{height:34px;width:min(420px,70%)}
+.sk-line{height:16px;width:min(560px,90%)}
+.skeleton-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:18px}
+.sk-card{aspect-ratio:4/5}
+.skeleton-stack{display:grid;gap:12px}
+.sk-row{height:64px}
+.skeleton-detail{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:24px}
+.sk-poster{aspect-ratio:3/4}
+@media (max-width:720px){.skeleton-detail{grid-template-columns:minmax(0,1fr)}.sk-poster{aspect-ratio:4/3}}

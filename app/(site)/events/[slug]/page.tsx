@@ -6,7 +6,7 @@ import { appUrl, paymentMode } from "@/lib/config";
 import { markupBps, mediaUrl, money, percent, percentRounded, posterUrl } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
 import { event, eventListings, fees, isFavorite, priceWithFee, similarEvents } from "@/lib/market";
-import { releaseExpired } from "@/lib/orders";
+import { releaseExpiredSoon } from "@/lib/orders";
 import { startCheckout, toggleFavorite } from "@/app/actions";
 import { DateBadge, Empty, EventCard, Notice, SellerBadge, ShareBar, categoryLabel } from "@/app/ui";
 
@@ -23,18 +23,16 @@ function siteUrl() {
 }
 
 export default async function Detail({ params, searchParams }: Params) {
-  const [{ slug }, query, user, { t, f }] = await Promise.all([params, searchParams, currentUser(), i18n()]);
-  await releaseExpired();
-  const item = await event(slug);
+  const { slug } = await params;
+  const [query, user, { t, f }, item, settings] = await Promise.all([searchParams, currentUser(), i18n(), event(slug), fees(), releaseExpiredSoon()]);
   if (!item) notFound();
   const quantity = Math.min(10, Math.max(1, Number.parseInt(query.qty ?? "1", 10) || 1));
   const sort = query.sort === "desc" ? "desc" : "asc";
   const available = item.starts_at.getTime() > Date.now() + 2700000;
-  const [listings, similar, saved, settings] = await Promise.all([
+  const [listings, similar, saved] = await Promise.all([
     available ? eventListings(item.id, { sort, quantity }) : Promise.resolve([]),
     similarEvents(item),
     user ? isFavorite(user.id, item.id) : Promise.resolve(false),
-    fees(),
   ]);
   const mode = paymentMode();
   const buyerBps = settings.buyer_bps;

@@ -8,12 +8,11 @@ import { LangSwitch, SideNav } from "@/app/client";
 
 /** Admin console shell: sidebar navigation with live to-do counts, no customer header or footer. */
 export default async function ConsoleLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [admin, { t, locale }] = await Promise.all([requireAdmin(), i18n()]);
-  const [counts] = await query<{ orders: number; listings: number; users: number }>(`SELECT
+  const [admin, { t, locale }, [counts]] = await Promise.all([requireAdmin(), i18n(), query<{ orders: number; listings: number; users: number }>(`SELECT
     (SELECT count(*)::int FROM orders o JOIN listings l ON l.id=o.listing_id JOIN events e ON e.id=l.event_id
       WHERE o.status IN ('verifying','refund_requested') OR (o.status='confirmed' AND o.settled_at IS NULL AND e.starts_at+interval '24 hours'<=now())) AS orders,
     (SELECT count(*)::int FROM listings WHERE status='pending') AS listings,
-    (SELECT count(*)::int FROM users WHERE seller_requested AND role='buyer') AS users`);
+    (SELECT count(*)::int FROM users WHERE seller_requested AND role='buyer') AS users`)]);
   const items = [
     { href: "/admin", label: t("console.nav.overview"), icon: <LayoutDashboard size={18} />, exact: true },
     { href: "/admin/orders", label: t("admin.orders"), icon: <ReceiptText size={18} />, badge: counts.orders },

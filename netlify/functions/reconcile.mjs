@@ -1,6 +1,6 @@
-// Hourly safety net on Netlify: releases stale reservations, cleans expired sessions and checks
-// Stripe payments. Reservations are also released on page loads, so this does not need to run often.
-// It also keeps the free Supabase project active.
+// Runs every 5 minutes on Netlify: releases stale reservations, cleans expired sessions and checks
+// Stripe payments. Running this often also keeps the website's server warm with an open database
+// connection, so visitors don't wait for a cold start, and keeps the free Supabase project active.
 export default async () => {
   const base = process.env.APP_URL;
   const secret = process.env.JOB_SECRET;
@@ -16,4 +16,4 @@ export default async () => {
   console.log("reconcile", response.status, await response.text());
 };
 
-export const config = { schedule: "@hourly" };
+export const config = { schedule: "*/5 * * * *" };

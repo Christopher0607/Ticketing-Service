@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { query } from "./db";
 import { configuredMode, sellerReady } from "./config";
 import { fee, type Category, type EventImage } from "./format";
@@ -80,10 +81,27 @@ export function spotlight(limit = 5) {
     WHERE x.featured OR x.tickets>0 ORDER BY x.featured DESC, x.score DESC, x.starts_at LIMIT $2`, [configuredMode(), limit]);
 }
 
-export async function event(slug: string) {
+export const event = cache(async (slug: string) => {
   const [item] = await query<Event>(`SELECT ${eventFields} FROM events e WHERE e.active AND e.slug=$2`, [configuredMode(), slug]);
   return item ?? null;
+});
+
+/**
+ * Small per-instance cache for settings that rarely change and are only displayed (orders always
+ * read fees inside their own transaction). Saving the settings clears it on that instance; other
+ * instances catch up within the TTL.
+ */
+const memo = globalThis as typeof globalThis & { settingsCache?: Map<string, { at: number; value: Promise<unknown> }> };
+function remembered<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const store = memo.settingsCache ??= new Map();
+  const hit = store.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
+  const value = load();
+  store.set(key, { at: Date.now(), value });
+  value.catch(() => store.delete(key));
+  return value;
 }
+export const forgetSettings = () => memo.settingsCache?.clear();
 
 export function similarEvents(item: Pick<Event, "id" | "category">, limit = 4) {
   return query<Event>(`SELECT ${eventFields} FROM events e WHERE e.active AND e.starts_at>now() AND e.category=$2 AND e.id<>$3
@@ -176,9 +194,8 @@ export async function sellerSummary(userId: string) {
 
 export type FeeSettings = { buyer_bps: number; seller_bps: number; max_markup_bps: number | null };
 
-export async function fees() {
-  const [settings] = await query<FeeSettings>("SELECT buyer_bps,seller_bps,max_markup_bps FROM fee_settings");
-  return settings;
+export function fees() {
+  return remembered("fees", 30000, async () => (await query<FeeSettings>("SELECT buyer_bps,seller_bps,max_markup_bps FROM fee_settings"))[0]);
 }
 
 export type PaymentSettings = {
@@ -186,9 +203,9 @@ export type PaymentSettings = {
   duitnow_id: string | null; qr_id: string | null; qr_remote: boolean | null; note: string | null;
 };
 
-export async function paymentSettings() {
-  const [settings] = await query<PaymentSettings>("SELECT bank_name,account_name,account_number,duitnow_id,qr_id,note,(SELECT remote FROM media WHERE id=qr_id) AS qr_remote FROM payment_settings");
-  return settings;
+export function paymentSettings() {
+  return remembered("payment", 30000, async () => (await query<PaymentSettings>(
+    "SELECT bank_name,account_name,account_number,duitnow_id,qr_id,note,(SELECT remote FROM media WHERE id=qr_id) AS qr_remote FROM payment_settings"))[0]);
 }
 
 export const paymentConfigured = (settings: PaymentSettings) =>

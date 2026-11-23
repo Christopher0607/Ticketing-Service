@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { query } from "./db";
 
 export type User = {
@@ -49,13 +50,14 @@ export async function clearSession() {
   jar.delete(sessionCookie);
 }
 
-export async function currentUser() {
+/** The signed-in user, looked up once per request however many components ask. */
+export const currentUser = cache(async () => {
   const token = (await cookies()).get(sessionCookie)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const [user] = await query<User>(`SELECT u.id,u.name,u.email,u.role,u.stripe_account,u.stripe_ready,u.email_verified,u.phone,u.payout_bank,u.payout_name,u.payout_account
     FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.banned_at IS NULL`, [digest(token)]);
   return user ?? null;
-}
+});
 
 export async function requireUser(path = "/account", role?: User["role"]) {
   const user = await currentUser();

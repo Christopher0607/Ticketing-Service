@@ -39,20 +39,37 @@ export function databaseConfig(url = databaseUrl()): PoolConfig {
   return {
     connectionString,
     ...(!verify ? { ssl: { rejectUnauthorized: false } } : ca ? { ssl: { ca, rejectUnauthorized: true } } : {}),
-    max: Number(process.env.DATABASE_POOL_MAX) || (pooled ? 3 : 10),
-    idleTimeoutMillis: pooled ? 10000 : 30000,
+    // Enough connections for a page's parallel queries; kept open between visits because opening one
+    // (TLS + authentication) costs several network round trips.
+    max: Number(process.env.DATABASE_POOL_MAX) || 10,
+    idleTimeoutMillis: pooled ? 300000 : 30000,
     connectionTimeoutMillis: 8000,
     ...(pooled ? {} : { statement_timeout: 15000 }),
   };
 }
 
 function pool() {
-  return globalDatabase.ticketPool ??= new Pool(databaseConfig());
+  if (!globalDatabase.ticketPool) {
+    globalDatabase.ticketPool = new Pool(databaseConfig());
+    // An idle connection closed by the server must not crash the process; the pool replaces it.
+    globalDatabase.ticketPool.on("error", (error) => console.error("Idle database connection closed", error.message));
+  }
+  return globalDatabase.ticketPool;
 }
+
+/** A connection that died while the server instance was idle fails without a PostgreSQL error code. */
+const droppedConnection = (error: unknown) => !(error as { code?: string }).code ||
+  ["ECONNRESET", "EPIPE", "57P01", "57P05"].includes((error as { code?: string }).code ?? "");
 
 export async function query<T extends QueryResultRow = QueryResultRow>(sql: string, values: unknown[] = []) {
   await ensureMigrated(pool());
-  return (await pool().query<T>(sql, values)).rows;
+  try {
+    return (await pool().query<T>(sql, values)).rows;
+  } catch (error) {
+    // Reads are retried once on a fresh connection; writes are not, so nothing is applied twice.
+    if (!/^\s*SELECT\b/i.test(sql) || !droppedConnection(error)) throw error;
+    return (await pool().query<T>(sql, values)).rows;
+  }
 }
 
 export async function tx<T>(run: (client: PoolClient) => Promise<T>): Promise<T> {
