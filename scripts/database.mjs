@@ -4,8 +4,16 @@ import pg from "pg";
 
 const operation = process.argv[2];
 // Migrations take an advisory lock, so on Supabase point DATABASE_MIGRATION_URL at the session pooler (port 5432).
-const databaseUrl = (operation === "migrate" && process.env.DATABASE_MIGRATION_URL) || process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL is required.");
+const rawUrl = (operation === "migrate" && process.env.DATABASE_MIGRATION_URL) || process.env.DATABASE_URL;
+if (!rawUrl) throw new Error("DATABASE_URL is required.");
+// DATABASE_PASSWORD, when set, replaces the password in the URL (no URL-encoding needed).
+function withPassword(value) {
+  if (!process.env.DATABASE_PASSWORD) return value;
+  const url = new URL(value);
+  url.password = encodeURIComponent(process.env.DATABASE_PASSWORD);
+  return url.toString();
+}
+const databaseUrl = withPassword(rawUrl);
 
 async function clientConfig(url) {
   const raw = process.env.DATABASE_SSL_CA?.trim();

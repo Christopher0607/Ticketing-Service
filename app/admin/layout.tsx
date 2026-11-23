@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { site } from "@/lib/config";
+import { site, databaseConfigured } from "@/lib/config";
 import { i18n } from "@/lib/i18n";
 import { SetupPending } from "@/app/ui";
 
@@ -11,6 +11,6 @@ export default async function AdminRoot({ children }: Readonly<{ children: React
   const [{ t }, head] = await Promise.all([i18n(), headers()]);
   const adminHost = site.adminHost();
   if (adminHost && head.get("host")?.toLowerCase() !== adminHost) notFound();
-  if (!process.env.DATABASE_URL) return <SetupPending t={t} />;
+  if (!databaseConfigured()) return <SetupPending t={t} />;
   return <div className="console-root">{children}</div>;
 }

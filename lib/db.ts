@@ -1,6 +1,7 @@
 import { Pool, type PoolClient, type PoolConfig, type QueryResultRow } from "pg";
 import { ensureMigrated } from "./migrate";
 import { supabaseRootCa } from "./migrations.generated";
+import { databaseUrl } from "./config";
 
 const globalDatabase = globalThis as typeof globalThis & { ticketPool?: Pool };
 
@@ -22,8 +23,8 @@ function certificate(url: string) {
  * Supabase transaction pooling (port 6543) suits serverless hosts such as Netlify:
  * keep the pool tiny and avoid session-level startup parameters.
  */
-export function databaseConfig(url = process.env.DATABASE_URL): PoolConfig {
-  if (!url) throw new Error("DATABASE_URL is required");
+export function databaseConfig(url = databaseUrl()): PoolConfig {
+  if (!url) throw new Error("DATABASE_URL is missing or is not a postgresql:// connection string");
   const pooled = /pooler\.supabase\.com/.test(url) || process.env.DATABASE_POOLED === "true";
   const ca = certificate(url);
   // Escape hatch if a provider's certificate chain can't be verified: encrypted, but unverified.

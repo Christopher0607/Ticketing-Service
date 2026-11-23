@@ -16,6 +16,28 @@ export const sellerReady = (param: string) =>
 
 export const configuredMode = () => process.env.PAYMENT_MODE ?? "";
 
+/**
+ * PostgreSQL connection URL, or null when DATABASE_URL is missing or not a usable postgres:// URL.
+ * DATABASE_PASSWORD, when set, replaces the URL's password, so Supabase's connection string can be
+ * pasted unchanged (with its [YOUR-PASSWORD] placeholder) and passwords need no URL-encoding.
+ */
+export function databaseUrl(): string | null {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (!/^postgres(ql)?:$/.test(url.protocol) || !url.hostname) return null;
+    const password = process.env.DATABASE_PASSWORD;
+    if (password) url.password = encodeURIComponent(password);
+    if (/YOUR-PASSWORD/i.test(decodeURIComponent(url.password))) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export const databaseConfigured = () => databaseUrl() !== null;
+
 export function appUrl() {
   const configured = new URL(process.env.APP_URL ?? "http://localhost:3000");
   if (configured.protocol !== "https:" && !(configured.protocol === "http:" && ["localhost", "127.0.0.1"].includes(configured.hostname))) {

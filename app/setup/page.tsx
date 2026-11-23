@@ -4,13 +4,14 @@ import { query } from "@/lib/db";
 import { i18n } from "@/lib/i18n";
 import { createFirstAdmin } from "@/app/actions";
 import { Notice, SetupPending } from "@/app/ui";
+import { databaseConfigured } from "@/lib/config";
 
 export const metadata = { title: "Setup", robots: { index: false, follow: false } };
 
 /** One-time page to create the first administrator. Needs ?token=SETUP_TOKEN and disappears once an admin exists. */
 export default async function Setup({ searchParams }: { searchParams: Promise<{ token?: string; error?: string }> }) {
   const [{ token, error }, { t }] = await Promise.all([searchParams, i18n()]);
-  if (!process.env.DATABASE_URL) return <SetupPending t={t} />;
+  if (!databaseConfigured()) return <SetupPending t={t} />;
   const expected = process.env.SETUP_TOKEN ?? "";
   if (expected.length < 24 || token !== expected) notFound();
   const [existing] = await query<{ count: number }>("SELECT count(*)::int AS count FROM users WHERE role='admin'");

@@ -21,7 +21,7 @@ const en: Record<LegalSlug, LegalDoc> = {
       ] },
       { id: "role", heading: "2. Our role", body: [
         "The Platform is a marketplace. Tickets are listed and sold by independent sellers (\"Sellers\") to buyers (\"Buyers\"). We are not the event organiser, promoter, venue or original ticket issuer, and we do not own the tickets listed.",
-        "Sellers set their own prices. We do not buy tickets to resell them and we do not profit from the difference between face value and resale price. We earn only the service fees described in section 5.",
+        "Sellers set their own prices. We do not buy tickets to resell them and we do not profit from the difference between face value and resale price. We earn only the service fees described in section 4.",
         "We review sellers and listings, hold Buyers' payments and release them to Sellers only when the conditions in these Terms are met (\"Payment Protection\"). Reviewing a listing does not mean we guarantee that an organiser will honour a ticket; entry to an event is subject to the organiser's and venue's own terms.",
       ] },
       { id: "accounts", heading: "3. Your account", body: [

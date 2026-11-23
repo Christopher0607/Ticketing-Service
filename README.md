@@ -56,7 +56,8 @@
 ### 步骤
 
 1. **Supabase**：用 Google 登录 → New project（Region 选 **Southeast Asia (Singapore)**，设置数据库密码并记下来）。
-   - Project Settings → Database → **Connection string**：复制 *Transaction pooler*（端口 6543）和 *Session pooler*（端口 5432）两条连接串。
+   - 顶部 **Connect** → Direct → 方式选 *Transaction pooler*（端口 6543），把整串原样复制到 `DATABASE_URL`（保留 `[YOUR-PASSWORD]` 也可以）。
+   - 数据库密码单独填到 `DATABASE_PASSWORD`（特殊字符也没关系）；忘了密码可在 Project Settings → Database 重设。
    - 同一页 **SSL Configuration → Download certificate**，下载 CA 证书。
    - Project Settings → **API**：复制 Project URL 和 `service_role`（或 secret）key。⚠️ 这个 key 绝不能公开。
 2. **Netlify**：用 GitHub 登录 → Add new site → Import from Git → 选 `Ticketing-Service`，**分支选 `main`**。构建设置会自动读取 `netlify.toml`。
