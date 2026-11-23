@@ -24,7 +24,8 @@ export default async function About() {
     <div className="feature-grid four">{values.map(([Icon, title, body]) => <div key={title} className="panel feature">
       <span className="feature-icon"><Icon size={22} /></span><h2>{t(title)}</h2><p>{t(body)}</p></div>)}</div>
     <section className="panel about-company"><h2>{t("about.company")}</h2>
-      <p>{company.name} ({company.regNo})<br />{company.address}</p>
+      {company.name ? <p>{company.name}{company.regNo && ` (${company.regNo})`}{company.address && <><br />{company.address}</>}</p>
+        : <p className="muted">{t("about.companyPending")}</p>}
       <SupportLinks t={t} />
     </section>
     <div className="inline-form centered-row"><Link href="/events" className="button primary">{t("account.explore")}</Link><Link href="/sell" className="button outline">{t("nav.sell")}</Link></div>

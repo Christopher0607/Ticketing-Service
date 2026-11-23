@@ -26,5 +26,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return <html lang={locale === "zh" ? "zh-Hans-MY" : "en-MY"}><body>
     <a className="skip" href="#content">{t("skip")}</a>
     {children}
+    {/* Netlify's free-plan badge script skips rendering when these ids already exist; CSS hides it regardless. */}
+    <div id="nl-badge-frame" hidden aria-hidden="true" /><div id="nl-hud-frame" hidden aria-hidden="true" />
   </body></html>;
 }

@@ -18,7 +18,7 @@ test("mobile catalogue works without horizontal page overflow", async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByText(/Local demo/)).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Real tickets/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Malaysia’s No.1/ })).toBeVisible();
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth === innerWidth);
   expect(await fits()).toBe(true);
   await page.getByRole("textbox", { name: /Search events/ }).fill("basketball");
@@ -28,6 +28,22 @@ test("mobile catalogue works without horizontal page overflow", async ({ page })
   await page.getByRole("link", { name: /KL Basketball Finals/ }).click();
   await expect(page.getByRole("button", { name: "Select tickets" })).toBeVisible();
   expect(await fits()).toBe(true);
+});
+
+test("the hosting provider's badge is never shown or clickable", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#nl-badge-frame")).toBeHidden();
+  // Simulates the iframe Netlify's free plan injects at the bottom-right corner.
+  const state = await page.evaluate(() => {
+    const frame = document.createElement("iframe");
+    frame.id = "badge-" + Date.now();
+    frame.title = "Powered by Netlify";
+    frame.srcdoc = "<button>Powered by Netlify</button>";
+    frame.style.cssText = "position:fixed;bottom:0;right:0;width:216px;height:92px;border:0;z-index:2147483645";
+    document.body.append(frame);
+    return { display: getComputedStyle(frame).display, hit: document.elementFromPoint(innerWidth - 40, innerHeight - 30) === frame };
+  });
+  expect(state).toEqual({ display: "none", hit: false });
 });
 
 test("Chinese is the default for Chinese browsers and the language toggle remembers English", async ({ browser, baseURL }) => {
@@ -40,7 +56,7 @@ test("Chinese is the default for Chinese browsers and the language toggle rememb
   await expect(page).toHaveURL(/\/events$/);
   await expect(page.getByRole("heading", { name: "Explore events" })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Real tickets/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Malaysia’s No.1/ })).toBeVisible();
   await page.goto("/account?error=Call%20this%20number");
   await expect(page.locator(".notice.error")).toHaveText("We couldn’t complete that action. Please try again.");
   await expect(page.getByText("Call this number")).toHaveCount(0);

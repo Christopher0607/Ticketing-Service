@@ -75,7 +75,7 @@ export async function Footer() {
       </div>
     </div>
     <div className="copyright"><span>{t("footer.rights", { year: new Date().getFullYear() })}</span>
-      {process.env.COMPANY_NAME && <span>{company.name} ({company.regNo})</span>}</div>
+      {company.name && <span>{company.name}{company.regNo && ` (${company.regNo})`}</span>}</div>
   </div></footer>;
 }
 

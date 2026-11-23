@@ -66,11 +66,11 @@ export const site = {
     const digits = (process.env.SUPPORT_WHATSAPP ?? "").replace(/\D/g, "");
     return digits.length >= 8 && digits.length <= 15 ? digits : null;
   },
-  /** Legal entity details shown in the footer and legal pages (placeholders until set). */
+  /** Legal entity details shown in the footer, About and legal pages; null until provided. */
   company: () => ({
-    name: process.env.COMPANY_NAME || "[Company name] Sdn. Bhd.",
-    regNo: process.env.COMPANY_REG_NO || "[SSM registration no.]",
-    address: process.env.COMPANY_ADDRESS || "[Registered address]",
+    name: process.env.COMPANY_NAME?.trim() || null,
+    regNo: process.env.COMPANY_REG_NO?.trim() || null,
+    address: process.env.COMPANY_ADDRESS?.trim() || null,
   }),
   /** Optional dedicated host for the admin console, e.g. admin.example.com. */
   adminHost: () => process.env.ADMIN_HOST?.trim().toLowerCase() || null,

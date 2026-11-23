@@ -22,7 +22,7 @@ export default async function LegalPage({ params }: Params) {
   let url = "http://localhost:3000";
   try { url = appUrl(); } catch { /* local default */ }
   const values: Record<string, string> = {
-    company: company.name, regNo: company.regNo, address: company.address,
+    company: company.name ?? t("company.pending"), regNo: company.regNo ?? t("company.pending"), address: company.address ?? t("company.pending"),
     email: site.supportEmail() ?? "[support email]", site: url,
     buyerFee: percent(settings.buyer_bps), sellerFee: percent(settings.seller_bps),
   };
