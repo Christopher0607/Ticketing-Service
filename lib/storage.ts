@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
  * proof documents to the private "private" bucket. Otherwise files are kept in PostgreSQL.
  */
 const base = () => process.env.SUPABASE_URL?.replace(/\/+$/, "") ?? "";
-const key = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+// Supabase calls this the service_role key (legacy) or the secret key (sb_secret_...); either name works.
+const key = () => process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || "";
 
 export const remoteStorage = () => Boolean(base() && key());
 

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { Check, Copy, Home, Search, Tag, UserRound } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
+import { Check, CheckCircle2, Copy, Home, Search, Tag, Upload, UploadCloud, UserRound, X } from "lucide-react";
 
 export function LangSwitch({ to, label, title }: { to: "zh" | "en"; label: string; title: string }) {
   const pathname = usePathname();
   const href = `/lang?to=${to}&next=${encodeURIComponent(pathname)}`;
-  return <a className="lang-switch" href={href} title={title} aria-label={title} lang={to === "zh" ? "zh" : "en"}
+  return <a className="lang-switch" href={href} title={title} aria-label={`${label} · ${title}`} lang={to === "zh" ? "zh" : "en"}
     onClick={(event) => {
       event.preventDefault();
       window.location.href = `/lang?to=${to}&next=${encodeURIComponent(pathname + window.location.search)}`;
@@ -194,4 +195,58 @@ export function PriceFields({ sellerBps, buyerBps, capBps, labels }: {
       {overCap && <em>{labels.overCap}</em>}
     </div>}
   </>;
+}
+
+async function compressPhoto(file: File, maxSide: number) {
+  if (file.size < 900_000 || typeof createImageBitmap !== "function") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return blob && blob.size < file.size ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
+}
+
+function UploadButton({ label, busyLabel, busy }: { label: string; busyLabel: string; busy: boolean }) {
+  const { pending } = useFormStatus();
+  return <button className="button primary" disabled={pending || busy}><Upload size={17} /> {pending || busy ? busyLabel : label}</button>;
+}
+
+/** Tap-to-upload payment screenshot with preview (compressed in the browser), like the group-buy site. */
+export function ReceiptUploader({ labels }: { labels: { field: string; choose: string; hint: string; selected: string; remove: string; upload: string; uploading: string; tooBig: string } }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const clear = () => { setPreview(null); setError(null); if (input.current) input.current.value = ""; };
+  return <div className="receipt-uploader">
+    <input ref={input} className="sr-only" type="file" name="receipt" accept="image/jpeg,image/png,image/webp" required aria-label={labels.field}
+      onChange={async (event) => {
+        const field = event.currentTarget;
+        const file = field.files?.[0];
+        setError(null);
+        if (!file) return clear();
+        if (file.size > 8 * 1024 * 1024) { setError(labels.tooBig); field.value = ""; setPreview(null); return; }
+        setPreview(URL.createObjectURL(file));
+        setBusy(true);
+        const smaller = await compressPhoto(file, 1800);
+        if (smaller !== file) { const transfer = new DataTransfer(); transfer.items.add(smaller); field.files = transfer.files; }
+        setBusy(false);
+      }} />
+    {!preview ? <button type="button" className="dropzone" onClick={() => input.current?.click()}>
+      <UploadCloud size={36} /><strong>{labels.choose}</strong><small>{labels.hint}</small>
+    </button> : <div className="receipt-preview-box">
+      <img src={preview} alt={labels.field} />
+      <button type="button" className="receipt-clear" onClick={clear} aria-label={labels.remove}><X size={16} /></button>
+      <p><CheckCircle2 size={16} /> {labels.selected}</p>
+    </div>}
+    {error && <p className="notice error" role="alert">{error}</p>}
+    {preview && <UploadButton label={labels.upload} busyLabel={labels.uploading} busy={busy} />}
+  </div>;
 }

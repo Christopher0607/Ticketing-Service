@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { CalendarDays, Check, ChevronLeft, LockKeyhole, MapPin, MessageCircle, QrCode, Ticket, Upload, UserRound } from "lucide-react";
-import { mediaUrl, money, percent, posterUrl, shortId } from "@/lib/format";
+import { CalendarDays, Check, ChevronLeft, Download, Landmark, LockKeyhole, MapPin, Maximize2, MessageCircle, QrCode, Ticket, TriangleAlert, Upload, UserRound } from "lucide-react";
+import { mediaDownloadUrl, mediaUrl, money, percent, posterUrl, shortId } from "@/lib/format";
 import { i18n, type MessageKey } from "@/lib/i18n";
 import { paymentConfigured, paymentSettings } from "@/lib/market";
 import type { Order } from "@/lib/orders";
@@ -9,7 +9,7 @@ import {
   cancelOrder, confirmReceipt, deliverOrder, payOrder, requestRefund, reviewRefund, settleOrder, supportConfirmDelivery,
   submitReview, supportOpenRefund, uploadReceipt, verifyPayment,
 } from "@/app/actions";
-import { CopyButton, Countdown, ImageField, PaymentRefresh } from "@/app/client";
+import { CopyButton, Countdown, PaymentRefresh, ReceiptUploader } from "@/app/client";
 import { Notice, Stars, Status, SupportLinks } from "@/app/ui";
 
 const stepKeys: MessageKey[] = ["order.step.pay", "order.step.transfer", "order.step.confirm", "order.step.settle"];
@@ -60,23 +60,39 @@ export async function OrderView({ order, viewer, notice, back }: {
         {pay && <div className="panel pay-panel">
           <div className="pay-head"><h2><QrCode size={20} /> {t("pay.title")}</h2><Countdown until={deadline} label={t("order.holdUntil", { time: f.time(new Date(deadline)) })} /></div>
           {paymentConfigured(pay) ? <>
+            <div className="pay-reference" role="note">
+              <p><TriangleAlert size={16} /> {t("pay.referenceWarn")}</p>
+              <div className="pay-reference-code"><strong>{reference}</strong><CopyButton value={reference} label={t("pay.copy")} done={t("pay.copied")} /></div>
+              <small>{t("pay.referenceHint")}</small>
+            </div>
             <div className="pay-amount"><span>{t("pay.amount")}</span><strong>{money(total)}</strong><CopyButton value={(total / 100).toFixed(2)} label={t("pay.copy")} done={t("pay.copied")} /></div>
-            <p>{t("pay.exact")}</p>
-            <div className="pay-grid">
-              {pay.qr_id && <figure className="pay-qr"><img src={mediaUrl(pay.qr_id, pay.qr_remote)} alt="DuitNow QR" /><figcaption>{t("pay.qr")}</figcaption></figure>}
-              <dl className="pay-details">
-                <div><dt>{t("pay.reference")}</dt><dd><strong>{reference}</strong><CopyButton value={reference} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>
-                {pay.duitnow_id && <div><dt>{t("pay.duitnow")}</dt><dd>{pay.duitnow_id}<CopyButton value={pay.duitnow_id} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>}
-                {pay.bank_name && <div><dt>{t("pay.bank")}</dt><dd>{pay.bank_name}</dd></div>}
-                {pay.account_name && <div><dt>{t("pay.accountName")}</dt><dd>{pay.account_name}</dd></div>}
-                {pay.account_number && <div><dt>{t("pay.accountNumber")}</dt><dd>{pay.account_number}<CopyButton value={pay.account_number.replace(/\s/g, "")} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>}
-              </dl>
+            <div className="pay-cards">
+              {pay.qr_id && <div className="pay-card qr-card">
+                <h3><QrCode size={18} /> {t("pay.qrTitle")} <span className="pay-tag">{t("pay.fastest")}</span></h3>
+                <a href={mediaUrl(pay.qr_id, pay.qr_remote)} target="_blank" rel="noreferrer" className="pay-qr" title={t("pay.zoom")}>
+                  <img src={mediaUrl(pay.qr_id, pay.qr_remote)} alt="DuitNow QR" /><span className="pay-zoom"><Maximize2 size={12} /> {t("pay.zoom")}</span></a>
+                <p className="pay-qr-tip">{t("pay.qrTip")}</p>
+                <a className="button outline small" href={mediaDownloadUrl(pay.qr_id, pay.qr_remote)} download="crazy-monkey-duitnow-qr.webp"><Download size={15} /> {t("pay.downloadQr")}</a>
+                {pay.account_name && <p className="pay-qr-name">{t("pay.accountName")}: <strong>{pay.account_name}</strong></p>}
+              </div>}
+              {(pay.bank_name || pay.account_number || pay.duitnow_id) && <div className="pay-card">
+                <h3><Landmark size={18} /> {t("pay.bankTitle")}</h3>
+                <dl className="pay-details">
+                  {pay.bank_name && <div><dt>{t("pay.bank")}</dt><dd>{pay.bank_name}</dd></div>}
+                  {pay.account_name && <div><dt>{t("pay.accountName")}</dt><dd>{pay.account_name}</dd></div>}
+                  {pay.account_number && <div><dt>{t("pay.accountNumber")}</dt><dd>{pay.account_number}<CopyButton value={pay.account_number.replace(/\s/g, "")} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>}
+                  {pay.duitnow_id && <div><dt>{t("pay.duitnow")}</dt><dd>{pay.duitnow_id}<CopyButton value={pay.duitnow_id} label={t("pay.copy")} done={t("pay.copied")} /></dd></div>}
+                  <div><dt>{t("pay.reference")}</dt><dd><strong className="gold">{reference}</strong></dd></div>
+                </dl>
+              </div>}
             </div>
             {pay.note && <p className="pay-note wrap">{pay.note}</p>}
-            <form action={uploadReceipt} className="form-stack upload-form">
+            <form action={uploadReceipt} className="upload-form">
               <input type="hidden" name="id" value={id} />
-              <ImageField name="receipt" label={t("pay.receipt")} hint={t("pay.receiptHint")} required maxSide={1800} />
-              <button className="button primary"><Upload size={17} /> {t("pay.upload")}</button>
+              <h3><Upload size={18} /> {t("pay.uploadTitle")}</h3>
+              <p className="muted">{t("pay.uploadLead")}</p>
+              <ReceiptUploader labels={{ field: t("pay.receipt"), choose: t("pay.choose"), hint: t("pay.receiptHint"), selected: t("pay.selected"),
+                remove: t("pay.remove"), upload: t("pay.upload"), uploading: t("pay.uploading"), tooBig: t("err.imageSize") }} />
             </form>
           </> : <p>{t("pay.notConfigured")}</p>}
         </div>}

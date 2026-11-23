@@ -368,9 +368,9 @@ export async function savePaymentSettings(form: FormData) {
       optional(form, "duitnow", 60), optional(form, "note", 300)];
     await tx(async (client) => {
       await client.query("UPDATE payment_settings SET bank_name=$1,account_name=$2,account_number=$3,duitnow_id=$4,note=$5", values);
-      if (qr) {
+      if (qr || field(form, "remove qr") === "on") {
         const { rows: [old] } = await client.query<{ qr_id: string | null }>("SELECT qr_id FROM payment_settings FOR UPDATE");
-        await client.query("UPDATE payment_settings SET qr_id=$1", [await storeMedia(client, qr)]);
+        await client.query("UPDATE payment_settings SET qr_id=$1", [qr ? await storeMedia(client, qr) : null]);
         if (old.qr_id) await deleteMedia(client, old.qr_id);
       }
     });

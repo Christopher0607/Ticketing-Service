@@ -22,6 +22,11 @@ export function mediaUrl(id: string, remote?: boolean | null) {
   return remote && base ? `${base}/storage/v1/object/public/media/${id}.webp` : `/media/${id}`;
 }
 
+/** Link that downloads an image (e.g. the DuitNow QR) so buyers can scan it from their gallery. */
+export function mediaDownloadUrl(id: string, remote?: boolean | null) {
+  return remote && process.env.SUPABASE_URL ? `${mediaUrl(id, true)}?download=crazy-monkey-duitnow-qr.webp` : `/media/${id}?download=1`;
+}
+
 export const posterUrl = (item: { poster_id?: string | null; poster_remote?: boolean | null; image: string }) =>
   item.poster_id ? mediaUrl(item.poster_id, item.poster_remote) : `/images/${item.image}.webp`;
 

@@ -42,7 +42,10 @@ export default async function AdminSettings({ searchParams }: { searchParams: Pr
             <label>{t("pay.accountName")}<input name="holder" maxLength={80} defaultValue={pay.account_name ?? ""} /></label></div>
           <div className="form-columns"><label>{t("pay.accountNumber")}<input name="account" maxLength={40} defaultValue={pay.account_number ?? ""} /></label>
             <label>{t("pay.duitnow")}<input name="duitnow" maxLength={60} defaultValue={pay.duitnow_id ?? ""} /></label></div>
-          <ImageField name="qr" label={t("admin.qr")} preview={pay.qr_id ? mediaUrl(pay.qr_id, pay.qr_remote) : null} compress={false} />
+          <div className="qr-field">
+            <ImageField name="qr" label={t("admin.qr")} hint={t("admin.qrHint")} preview={pay.qr_id ? mediaUrl(pay.qr_id, pay.qr_remote) : null} compress={false} />
+            {pay.qr_id && <label className="check-label"><input type="checkbox" name="remove qr" /> {t("admin.removeQr")}</label>}
+          </div>
           <label>{t("admin.note")}<textarea name="note" maxLength={300} defaultValue={pay.note ?? ""} /></label>
           <button className="button primary">{t("admin.savePayment")}</button>
         </form>

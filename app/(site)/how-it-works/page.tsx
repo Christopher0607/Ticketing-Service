@@ -29,7 +29,7 @@ export default async function Help() {
   return <div className="shell page">
     <div className="page-heading centered"><span className="empty-icon"><ShieldCheck size={24} /></span><h1>{t("how.title")}</h1><p>{t("how.lead")}</p></div>
     <ol className="steps vertical-mobile">{steps.map(([Icon, title, body], index) => <li key={title}>
-      <span className="step-number">0{index + 1}</span><Icon size={24} className="step-icon" /><h3>{t(title)}</h3><p>{t(body)}</p>
+      <span className="step-number" data-step={`0${index + 1}`} aria-hidden="true" /><Icon size={24} className="step-icon" /><h3>{t(title)}</h3><p>{t(body)}</p>
     </li>)}</ol>
     <nav className="chip-row help-nav" aria-label={t("how.faq")}>{sections.map((section) => <a key={section.id} href={`#${section.id}`} className="chip">{t(section.title)}</a>)}</nav>
     <div className="help-grid">

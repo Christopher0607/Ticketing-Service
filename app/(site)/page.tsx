@@ -77,7 +77,7 @@ export default async function Home() {
         <p className="kicker"><ShieldCheck size={15} /> {t("home.escrow.kicker")}</p>
         <h2 id="escrow" className="band-title">{t("home.escrow.title")}</h2>
         <ol className="steps">{steps.map(([Icon, title, body], index) => <li key={title}>
-          <span className="step-number">0{index + 1}</span><Icon size={24} className="step-icon" />
+          <span className="step-number" data-step={`0${index + 1}`} aria-hidden="true" /><Icon size={24} className="step-icon" />
           <h3>{t(title)}</h3><p>{t(body)}</p>
         </li>)}</ol>
         <Link href="/legal/refunds" className="text-link">{t("home.guaranteeLink")} <ArrowRight size={15} /></Link>
