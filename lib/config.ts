@@ -29,7 +29,9 @@ export function databaseUrl(): string | null {
     if (!/^postgres(ql)?:$/.test(url.protocol) || !url.hostname) return null;
     const password = process.env.DATABASE_PASSWORD;
     if (password) url.password = encodeURIComponent(password);
-    if (/YOUR-PASSWORD/i.test(decodeURIComponent(url.password))) return null;
+    // Supabase's placeholder, e.g. [YOUR-PASSWORD] or [YOUR-DATABASE-PASSWORD], means the password is still missing.
+    const filled = decodeURIComponent(url.password);
+    if (/^\[.*password.*\]$/i.test(filled) || /your[-_ ]?password/i.test(filled)) return null;
     return url.toString();
   } catch {
     return null;

@@ -17,6 +17,9 @@ test("database URL rejects missing, partial and placeholder values", () => {
   withEnv({ DATABASE_URL: "postgres.abc", DATABASE_PASSWORD: undefined }, () => assert.equal(databaseUrl(), null));
   withEnv({ DATABASE_URL: "https://example.com", DATABASE_PASSWORD: undefined }, () => assert.equal(databaseUrl(), null));
   withEnv({ DATABASE_URL: pooler, DATABASE_PASSWORD: undefined }, () => assert.equal(databaseUrl(), null));
+  withEnv({ DATABASE_URL: pooler.replace("[YOUR-PASSWORD]", "[YOUR-DATABASE-PASSWORD]"), DATABASE_PASSWORD: undefined }, () => assert.equal(databaseUrl(), null));
+  withEnv({ DATABASE_URL: pooler.replace("[YOUR-PASSWORD]", "[YOUR-DATABASE-PASSWORD]"), DATABASE_PASSWORD: "abc123" },
+    () => assert.equal(new URL(databaseUrl()).password, "abc123"));
 });
 
 test("DATABASE_PASSWORD fills in the password, special characters included", () => {
