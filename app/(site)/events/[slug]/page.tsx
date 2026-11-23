@@ -1,11 +1,11 @@
 import { CalendarDays, ChevronLeft, Clock3, ExternalLink, Heart, Hourglass, Map as MapIcon, MapPin, Navigation, ShieldCheck, Tag, Ticket } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { currentUser } from "@/lib/auth";
+import { sessionHash } from "@/lib/auth";
 import { appUrl, paymentMode } from "@/lib/config";
-import { markupBps, mediaUrl, money, percent, percentRounded, posterUrl } from "@/lib/format";
+import { markupBps, mediaUrl, money, percentRounded, posterUrl } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
-import { event, eventListings, fees, isFavorite, priceWithFee, similarEvents } from "@/lib/market";
+import { event, eventListings, fees, isFavoriteForSession, priceWithFee, similarEvents } from "@/lib/market";
 import { releaseExpiredSoon } from "@/lib/orders";
 import { startCheckout, toggleFavorite } from "@/app/actions";
 import { DateBadge, Empty, EventCard, Notice, SellerBadge, ShareBar, categoryLabel } from "@/app/ui";
@@ -23,17 +23,19 @@ function siteUrl() {
 }
 
 export default async function Detail({ params, searchParams }: Params) {
-  const { slug } = await params;
-  const [query, user, { t, f }, item, settings] = await Promise.all([searchParams, currentUser(), i18n(), event(slug), fees(), releaseExpiredSoon()]);
-  if (!item) notFound();
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   const quantity = Math.min(10, Math.max(1, Number.parseInt(query.qty ?? "1", 10) || 1));
   const sort = query.sort === "desc" ? "desc" : "asc";
-  const available = item.starts_at.getTime() > Date.now() + 2700000;
-  const [listings, similar, saved] = await Promise.all([
-    available ? eventListings(item.id, { sort, quantity }) : Promise.resolve([]),
-    similarEvents(item),
-    user ? isFavorite(user.id, item.id) : Promise.resolve(false),
+  // Everything starts at once: the event (usually cached), its listings, the visitor and their saved state.
+  const found = event(slug);
+  const [item, { t, f }, settings, saved, listings, similar] = await Promise.all([
+    found, i18n(), fees(), sessionHash().then((hash) => isFavoriteForSession(hash, slug)),
+    found.then((it) => it && it.starts_at.getTime() > Date.now() + 2700000 ? eventListings(it.id, { sort, quantity }) : []),
+    found.then((it) => it ? similarEvents(it) : []),
+    releaseExpiredSoon(),
   ]);
+  if (!item) notFound();
+  const available = item.starts_at.getTime() > Date.now() + 2700000;
   const mode = paymentMode();
   const buyerBps = settings.buyer_bps;
   const days = Math.ceil((item.starts_at.getTime() - Date.now()) / 86400000);
@@ -85,7 +87,7 @@ export default async function Detail({ params, searchParams }: Params) {
     <div className="shell detail-grid">
       <section>
         <div className="section-header compact" id="tickets"><div><h2>{t("event.available")}</h2>
-          <p>{t("event.priceNote", { fee: percent(buyerBps) })}</p></div></div>
+          <p>{t("event.priceNote")}</p></div></div>
         {available && <div className="ticket-filters">
           <div className="segmented" aria-label={t("event.howMany")}><span>{t("event.howMany")}</span>
             {[1, 2, 3, 4].map((n) => <Link key={n} href={filterHref({ qty: n })} className={quantity === n ? "active" : undefined} aria-current={quantity === n ? "true" : undefined}>{n === 4 ? "4+" : n}</Link>)}</div>

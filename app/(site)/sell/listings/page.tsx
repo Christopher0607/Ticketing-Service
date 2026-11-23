@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Pencil, PlusCircle, Ticket } from "lucide-react";
-import { requireSeller } from "@/lib/auth";
+import { loadFor, requireSeller } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { fee, money } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
@@ -11,11 +11,11 @@ import { Empty, Notice, Status } from "@/app/ui";
 export const metadata = { title: "My listings" };
 
 export default async function SellerListings({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
-  const [user, params, { t, f }, settings] = await Promise.all([requireSeller("/sell/listings"), searchParams, i18n(), fees()]);
-  const listings = await query<{ id: string; title: string; slug: string; starts_at: Date; section: string; price: number; face_value: number | null; available: number;
+  const [[, loaded], params, { t, f }, settings] = await Promise.all([loadFor(requireSeller("/sell/listings"), (id) => query<{ id: string; title: string; slug: string; starts_at: Date; section: string; price: number; face_value: number | null; available: number;
     quantity: number; status: string; paused_by_admin: boolean }>(`
     SELECT l.id,l.section,l.price,l.face_value,l.available,l.quantity,l.status,l.paused_by_admin,e.title,e.slug,e.starts_at
-    FROM listings l JOIN events e ON e.id=l.event_id WHERE seller_id=$1 AND l.status<>'closed' ORDER BY l.created_at DESC LIMIT 200`, [user.id]);
+    FROM listings l JOIN events e ON e.id=l.event_id WHERE seller_id=$1 AND l.status<>'closed' ORDER BY l.created_at DESC LIMIT 200`, [id])), searchParams, i18n(), fees()]);
+  const listings = loaded!;
   return <>
     <div className="page-heading heading-split"><div><h1>{t("seller.listings")}</h1><p>{t("seller.listingsLead")}</p></div>
       <Link className="button primary" href="/sell/new"><PlusCircle size={17} /> {t("seller.nav.new")}</Link></div>

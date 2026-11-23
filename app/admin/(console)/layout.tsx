@@ -23,7 +23,7 @@ export default async function ConsoleLayout({ children }: Readonly<{ children: R
   ];
   return <div className="console">
     <aside className="console-side">
-      <Link href="/admin" className="console-brand"><img src="/logo-96.png" alt="" width={36} height={36} />
+      <Link href="/admin" className="console-brand"><img src="/logo-144.webp" alt="" width={36} height={36} />
         <span><strong>CRAZY MONKEY</strong><small>{t("console.admin")}</small></span></Link>
       <SideNav items={items} label={t("console.admin")} />
       <div className="console-side-foot">

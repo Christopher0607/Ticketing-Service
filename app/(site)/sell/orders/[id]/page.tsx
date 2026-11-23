@@ -12,8 +12,7 @@ type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ error?: 
 export default async function SellerOrder({ params, searchParams }: Props) {
   const [{ id }, notice, { t }] = await Promise.all([params, searchParams, i18n()]);
   if (!uuid.test(id)) notFound();
-  const user = await requireSeller(`/sell/orders/${id}`);
-  const order = await orderById(id);
+  const [user, order] = await Promise.all([requireSeller(`/sell/orders/${id}`), orderById(id)]);
   // Sellers only see orders once payment is confirmed.
   if (!order || order.seller_id !== user.id || ["reserved", "verifying", "expired", "cancelled"].includes(order.status)) notFound();
   return <OrderView order={order} viewer="seller" notice={notice} back={{ href: "/sell/orders", label: t("seller.nav.orders") }} />;

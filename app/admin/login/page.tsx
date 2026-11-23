@@ -15,7 +15,7 @@ export default async function AdminLogin({ searchParams }: { searchParams: Promi
   return <main id="content" className="console-login">
     <div className="console-login-lang"><LangSwitch to={locale === "zh" ? "en" : "zh"} label={t("lang.switch")} title={t("lang.label")} /></div>
     <section className="panel auth-card console-login-card">
-      <img src="/logo.png" alt="" className="auth-logo" width={72} height={72} />
+      <img src="/logo-240.webp" alt="" className="auth-logo" width={72} height={72} />
       <p className="console-badge"><LockKeyhole size={14} /> {t("console.admin")}</p>
       <h1>{t("console.signInTitle")}</h1>
       <p>{t("console.signInLead")}</p>

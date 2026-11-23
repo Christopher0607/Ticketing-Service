@@ -13,14 +13,14 @@ export default async function NewListing({ searchParams }: { searchParams: Promi
   const cap = settings.max_markup_bps;
   return <>
     <div className="page-heading"><h1>{t("seller.list.title")}</h1>
-      <p>{t("seller.list.fee", { fee: percent(settings.seller_bps) })}{cap !== null && <> {cap === 0 ? t("seller.list.capFace") : t("seller.list.cap", { pct: percent(cap) })}</>}</p></div>
+      {cap !== null && <p>{cap === 0 ? t("seller.list.capFace") : t("seller.list.cap", { pct: percent(cap) })}</p>}</div>
     <Notice t={t} error={params.error} />
     {catalogue.length ? <form className="panel form-stack list-form" action={createListing}>
       <label>{t("seller.list.event")}<select name="event" aria-label={t("seller.list.event")} required defaultValue={catalogue.some((item) => item.id === params.event) ? params.event : ""}>
         <option value="" disabled>{t("seller.list.choose")}</option>{catalogue.map((item) => <option key={item.id} value={item.id}>{item.title} · {f.date(item.starts_at)}</option>)}</select></label>
       <label>{t("seller.list.section")}<input name="section" required minLength={2} maxLength={80} placeholder={t("seller.list.sectionPh")} /></label>
-      <PriceFields sellerBps={settings.seller_bps} buyerBps={settings.buyer_bps} capBps={cap}
-        labels={{ face: t("seller.list.face"), price: t("seller.list.price"), buyerPays: t("home.fees.buyerPays"), youGet: t("seller.youGet"), overCap: t("err.overCap") }} />
+      <PriceFields sellerBps={settings.seller_bps} capBps={cap}
+        labels={{ face: t("seller.list.face"), price: t("seller.list.price"), platformFee: t("seller.platformFee", { fee: percent(settings.seller_bps) }), youGet: t("seller.youGet"), overCap: t("err.overCap") }} />
       <label>{t("seller.list.quantity")}<input name="quantity" type="number" min={1} max={100} required defaultValue={1} /></label>
       <label>{t("seller.list.proof")}<textarea name="proof" required minLength={5} maxLength={1000} placeholder={t("seller.list.proofPh")} /></label>
       <label>{t("seller.list.file")}<input name="attachment" type="file" accept="application/pdf,image/png,image/jpeg" /></label>

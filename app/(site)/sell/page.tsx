@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, CircleDollarSign, Landmark, ListPlus, PlusCircle, Send, Ticket, Wallet } from "lucide-react";
-import { currentUser } from "@/lib/auth";
+import { currentUser, loadFor } from "@/lib/auth";
 import { query } from "@/lib/db";
-import { money, percent } from "@/lib/format";
+import { money } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
-import { fees, sellerSummary } from "@/lib/market";
+import { sellerSummary } from "@/lib/market";
 import { sellerOrders } from "@/lib/orders";
 import { requestSelling } from "@/app/actions";
 import { Empty, Notice, Status } from "@/app/ui";
@@ -15,15 +15,19 @@ export async function generateMetadata() {
 }
 
 export default async function SellHome({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
-  const [user, params, { t, f }, settings] = await Promise.all([currentUser(), searchParams, i18n(), fees()]);
+  const [[user, loaded], params, { t, f }] = await Promise.all([
+    loadFor(currentUser(), (id) => Promise.all([sellerSummary(id), sellerOrders(id),
+      query<{ seller_requested: boolean }>("SELECT seller_requested FROM users WHERE id=$1", [id])])),
+    searchParams, i18n(),
+  ]);
   if (user?.role !== "seller") {
-    const [application] = user?.role === "buyer" ? await query<{ seller_requested: boolean }>("SELECT seller_requested FROM users WHERE id=$1", [user.id]) : [];
+    const application = user?.role === "buyer" ? loaded?.[2][0] : undefined;
     return <div className="shell page sell-landing">
-      <div className="page-heading centered"><img src="/logo.png" alt="" className="landing-logo" width={96} height={96} /><h1>{t("sell.title")}</h1><p>{t("sell.lead")}</p></div>
+      <div className="page-heading centered"><img src="/logo-384.webp" alt="" className="landing-logo" width={96} height={96} /><h1>{t("sell.title")}</h1><p>{t("sell.lead")}</p></div>
       <div className="feature-grid">
         <div className="panel feature"><span className="feature-icon"><ListPlus size={24} /></span><h2>{t("sell.f1.title")}</h2><p>{t("sell.f1.body")}</p></div>
         <div className="panel feature"><span className="feature-icon"><Ticket size={24} /></span><h2>{t("sell.f2.title")}</h2><p>{t("sell.f2.body")}</p></div>
-        <div className="panel feature"><span className="feature-icon"><CircleDollarSign size={24} /></span><h2>{t("sell.f3.title")}</h2><p>{t("sell.f3.body", { fee: percent(settings.seller_bps) })}</p></div>
+        <div className="panel feature"><span className="feature-icon"><CircleDollarSign size={24} /></span><h2>{t("sell.f3.title")}</h2><p>{t("sell.f3.body")}</p></div>
       </div>
       <Notice t={t} error={params.error} success={params.success} />
       {user?.role === "admin" ? <Link className="button primary" href="/admin">{t("sell.admin")}</Link> : application?.seller_requested ?
@@ -36,7 +40,7 @@ export default async function SellHome({ searchParams }: { searchParams: Promise
         <Link className="button primary" href="/account?next=%2Fsell">{t("sell.signIn")}</Link>}
     </div>;
   }
-  const [summary, orders] = await Promise.all([sellerSummary(user.id), sellerOrders(user.id)]);
+  const [summary, orders] = loaded!;
   const toTransfer = orders.filter((order) => order.status === "paid");
   return <>
     <div className="page-heading heading-split"><div><h1>{t("seller.hello", { name: user.name })}</h1><p>{t("seller.lead")}</p></div>

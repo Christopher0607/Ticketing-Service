@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { BadgeCheck, CreditCard, LifeBuoy, ShieldCheck, Tag, Ticket, Undo2, Wallet } from "lucide-react";
-import { percent } from "@/lib/format";
 import { i18n, type MessageKey } from "@/lib/i18n";
-import { fees } from "@/lib/market";
 import { SupportLinks } from "@/app/ui";
 
 export async function generateMetadata() {
@@ -18,8 +16,7 @@ const sections: { id: string; icon: typeof Ticket; title: MessageKey; items: [Me
 ];
 
 export default async function Help() {
-  const [{ t }, settings] = await Promise.all([i18n(), fees()]);
-  const vars = { buyer: percent(settings.buyer_bps), seller: percent(settings.seller_bps) };
+  const { t } = await i18n();
   const steps = [
     [CreditCard, "home.step1.title", "home.step1.body"],
     [Ticket, "home.step2.title", "home.step2.body"],
@@ -35,7 +32,7 @@ export default async function Help() {
     <div className="help-grid">
       {sections.map((section) => <section key={section.id} id={section.id} className="panel faq">
         <h2><section.icon size={20} /> {t(section.title)}</h2>
-        {section.items.map(([q, a]) => <details key={q}><summary>{t(q)}</summary><p>{t(a, vars)}</p></details>)}
+        {section.items.map(([q, a]) => <details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>)}
       </section>)}
     </div>
     <section className="panel contact-card"><div><h2><LifeBuoy size={20} /> {t("help.contactTitle")}</h2><p>{t("help.contactBody")}</p></div><SupportLinks t={t} /></section>

@@ -172,9 +172,9 @@ export function SideNav({ items, label }: { items: SideNavItem[]; label: string 
 }
 
 /** Face value and price inputs with a live preview of what the buyer pays and the seller receives. */
-export function PriceFields({ sellerBps, buyerBps, capBps, labels }: {
-  sellerBps: number; buyerBps: number; capBps: number | null;
-  labels: { face: string; price: string; buyerPays: string; youGet: string; overCap: string };
+export function PriceFields({ sellerBps, capBps, labels }: {
+  sellerBps: number; capBps: number | null;
+  labels: { face: string; price: string; platformFee: string; youGet: string; overCap: string };
 }) {
   const [face, setFace] = useState("");
   const [price, setPrice] = useState("");
@@ -190,7 +190,7 @@ export function PriceFields({ sellerBps, buyerBps, capBps, labels }: {
       <label>{labels.price}<input name="price" type="number" min={2} max={25000} step=".01" required inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></label>
     </div>
     {priceSen !== null && priceSen > 0 && <div className={overCap ? "price-preview over" : "price-preview"} aria-live="polite">
-      <span>{labels.buyerPays} <strong>{rm(priceSen + fee(priceSen, buyerBps))}</strong></span>
+      <span>{labels.platformFee} <strong>−{rm(fee(priceSen, sellerBps))}</strong></span>
       <span>{labels.youGet} <strong>{rm(priceSen - fee(priceSen, sellerBps))}</strong></span>
       {overCap && <em>{labels.overCap}</em>}
     </div>}

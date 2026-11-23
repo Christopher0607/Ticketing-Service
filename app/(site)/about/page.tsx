@@ -19,7 +19,7 @@ export default async function About() {
     [Headset, "about.v4.title", "about.v4.body"],
   ] as const;
   return <div className="shell page about-page">
-    <div className="page-heading centered"><img src="/logo.png" alt="" className="landing-logo" width={96} height={96} /><h1>{t("about.title")}</h1><p>{t("about.lead")}</p></div>
+    <div className="page-heading centered"><img src="/logo-384.webp" alt="" className="landing-logo" width={96} height={96} /><h1>{t("about.title")}</h1><p>{t("about.lead")}</p></div>
     <section className="panel about-story"><h2>{t("about.storyTitle")}</h2><p>{t("about.story1")}</p><p>{t("about.story2")}</p></section>
     <div className="feature-grid four">{values.map(([Icon, title, body]) => <div key={title} className="panel feature">
       <span className="feature-icon"><Icon size={22} /></span><h2>{t(title)}</h2><p>{t(body)}</p></div>)}</div>

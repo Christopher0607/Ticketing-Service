@@ -9,7 +9,7 @@ import { query, tx } from "@/lib/db";
 import { consumeAccountLink, mailConfigured, sendAccountLink } from "@/lib/identity";
 import { categories, uuid } from "@/lib/format";
 import { deleteMedia, readImage, storeMedia } from "@/lib/media";
-import { forgetSettings } from "@/lib/market";
+import { forgetCached } from "@/lib/market";
 import { notify } from "@/lib/notify";
 import { deleteObject, storePrivate } from "@/lib/storage";
 import type { MessageKey } from "@/lib/messages";
@@ -57,13 +57,16 @@ function phone(form: FormData) {
   return digits;
 }
 function message(path: string, key: "error" | "success", value: MessageKey): never {
+  forgetCached(); // the action may have changed what visitors see
   const url = new URL(path, "http://localhost");
   url.searchParams.set(key, value);
   redirect(url.pathname + url.search);
 }
 async function attempt<T>(path: string, operation: () => Promise<T>): Promise<T> {
   try {
-    return await operation();
+    const result = await operation();
+    forgetCached(); // the action may have changed what visitors see
+    return result;
   } catch (error) {
     if (error instanceof ActionError) message(path, "error", error.key);
     console.error("Marketplace action failed", error instanceof Error ? error.message : error);
@@ -357,7 +360,6 @@ export async function updateFees(form: FormData) {
     await query("UPDATE fee_settings SET buyer_bps=$1,seller_bps=$2,max_markup_bps=$3",
       [scaled(form, "buyer fee", 0, 3000, true), scaled(form, "seller fee", 0, 3000, true), cap]);
   });
-  forgetSettings();
   message(path, "success", "ok.ratesUpdated");
 }
 
@@ -377,7 +379,6 @@ export async function savePaymentSettings(form: FormData) {
       }
     });
   });
-  forgetSettings();
   message(path, "success", "ok.paymentSettings");
 }
 

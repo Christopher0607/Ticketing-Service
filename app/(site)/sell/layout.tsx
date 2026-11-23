@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { ExternalLink, LayoutDashboard, ListChecks, PlusCircle, ReceiptText, Wallet } from "lucide-react";
-import { currentUser } from "@/lib/auth";
+import { currentUser, loadFor } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { i18n } from "@/lib/i18n";
 import { SideNav } from "@/app/client";
 
 /** Seller centre: approved sellers get a sidebar workspace; everyone else sees the seller landing page. */
 export default async function SellerLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [user, { t }] = await Promise.all([currentUser(), i18n()]);
+  const [[user, loaded], { t }] = await Promise.all([loadFor(currentUser(), (id) => query<{ transfer: number }>(`SELECT count(*)::int AS transfer FROM orders o JOIN listings l ON l.id=o.listing_id
+    WHERE l.seller_id=$1 AND o.status='paid'`, [id])), i18n()]);
   if (user?.role !== "seller") return children;
-  const [counts] = await query<{ transfer: number }>(`SELECT count(*)::int AS transfer FROM orders o JOIN listings l ON l.id=o.listing_id
-    WHERE l.seller_id=$1 AND o.status='paid'`, [user.id]);
+  const [counts] = loaded!;
   const items = [
     { href: "/sell", label: t("seller.nav.overview"), icon: <LayoutDashboard size={18} />, exact: true },
     { href: "/sell/new", label: t("seller.nav.new"), icon: <PlusCircle size={18} /> },

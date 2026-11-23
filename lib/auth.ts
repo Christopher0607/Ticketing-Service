@@ -9,6 +9,8 @@ export type User = {
   email_verified: boolean; phone: string | null; payout_bank: string | null; payout_name: string | null; payout_account: string | null;
 };
 const sessionCookie = "cm_session";
+/** Remembers the signed-in user's id so pages can start loading their data before the session check finishes. */
+const hintCookie = "cm_uid";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export function passwordHash(password: string) {
@@ -37,10 +39,10 @@ export async function authAllowed(email: string) {
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString("hex");
   await query("INSERT INTO sessions VALUES ($1, $2, now() + interval '30 days')", [digest(token), userId]);
-  (await cookies()).set(sessionCookie, token, {
-    httpOnly: true, secure: process.env.APP_URL?.startsWith("https://"),
-    sameSite: "lax", path: "/", maxAge: 30 * 24 * 60 * 60,
-  });
+  const jar = await cookies();
+  const options = { httpOnly: true, secure: process.env.APP_URL?.startsWith("https://"), sameSite: "lax" as const, path: "/", maxAge: 30 * 24 * 60 * 60 };
+  jar.set(sessionCookie, token, options);
+  jar.set(hintCookie, userId, options);
 }
 
 export async function clearSession() {
@@ -48,6 +50,31 @@ export async function clearSession() {
   const token = jar.get(sessionCookie)?.value;
   if (token) await query("DELETE FROM sessions WHERE token_hash=$1", [digest(token)]);
   jar.delete(sessionCookie);
+  jar.delete(hintCookie);
+}
+
+/** Hash of the visitor's session token (or null), for queries that run alongside the user lookup. */
+export async function sessionHash() {
+  const token = (await cookies()).get(sessionCookie)?.value;
+  return token && /^[a-f0-9]{64}$/.test(token) ? digest(token) : null;
+}
+
+/**
+ * Loads a signed-in user's data without waiting for the session lookup when the id remembered at
+ * sign-in is present. The early result is used only if the session confirms the same user; otherwise
+ * the data is loaded again for the confirmed user (or not at all when nobody is signed in).
+ */
+export async function loadFor<U extends { id: string } | null, T>(userPromise: Promise<U>, load: (userId: string) => Promise<T>): Promise<[U, T | null]> {
+  const value = (await cookies()).get(hintCookie)?.value;
+  const hint = value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
+  const early = hint ? load(hint).then((data) => ({ data }), () => null) : null;
+  const user = await userPromise;
+  if (!user) return [user, null];
+  if (early && user.id === hint) {
+    const got = await early;
+    if (got) return [user, got.data];
+  }
+  return [user, await load(user.id)];
 }
 
 /** The signed-in user, looked up once per request however many components ask. */

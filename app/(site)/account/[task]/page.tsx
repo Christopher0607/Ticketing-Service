@@ -17,7 +17,7 @@ export default async function IdentityPage({ params, searchParams }: {
   const isRecover = task === "recover";
   const tokenValid = typeof token === "string" && /^[a-f0-9]{64}$/.test(token);
   return <div className="shell page auth-page"><section className="panel auth-card">
-    <img src="/logo.png" alt="" className="auth-logo" width={72} height={72} />
+    <img src="/logo-240.webp" alt="" className="auth-logo" width={72} height={72} />
     <h1>{isVerify ? t("task.verify") : t("task.reset")}</h1>
     <Notice t={t} error={error} success={success} />
     {isRecover && !mailConfigured() ? <><p>{t("task.noMail")}</p><SupportLinks t={t} /></> : isRecover ? <form action={requestPasswordReset} className="form-stack">

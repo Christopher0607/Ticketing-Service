@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { preconnect } from "react-dom";
 import { appUrl } from "@/lib/config";
 import { i18n } from "@/lib/i18n";
 import "./styles.css";
@@ -23,6 +24,8 @@ export const dynamic = "force-dynamic";
 /** Shared document shell. The customer site, seller centre and admin console add their own layouts. */
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const { t, locale } = await i18n();
+  // Posters are served from Supabase Storage: open that connection early.
+  try { if (process.env.SUPABASE_URL) preconnect(new URL(process.env.SUPABASE_URL).origin); } catch { /* invalid URL */ }
   return <html lang={locale === "zh" ? "zh-Hans-MY" : "en-MY"}><body>
     <a className="skip" href="#content">{t("skip")}</a>
     {children}

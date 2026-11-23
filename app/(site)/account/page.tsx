@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Heart, KeyRound, ReceiptText, Ticket, UserRound } from "lucide-react";
-import { currentUser } from "@/lib/auth";
+import { currentUser, loadFor } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { money, posterUrl } from "@/lib/format";
 import { i18n, type MessageKey } from "@/lib/i18n";
@@ -27,12 +27,22 @@ type Group = keyof typeof groups;
 type Search = { mode?: string; next?: string; error?: string; success?: string; notice?: string; tab?: string; show?: string };
 
 export default async function Account({ searchParams }: { searchParams: Promise<Search> }) {
-  const [user, params, { t, f }] = await Promise.all([currentUser(), searchParams, i18n()]);
+  const params = await searchParams;
+  const tab = tabs.find((value) => value === params.tab) ?? "orders";
+  const [[user, data], { t, f }] = await Promise.all([
+    loadFor(currentUser(), (userId) => Promise.all([
+      tab === "orders" ? recentOrders(userId, "buyer") : Promise.resolve([]),
+      tab === "favorites" ? favoriteEvents(userId) : Promise.resolve([]),
+      fees(),
+      query<{ seller_requested: boolean; phone: string | null }>("SELECT seller_requested,phone FROM users WHERE id=$1", [userId]),
+    ])),
+    i18n(),
+  ]);
   const next = typeof params.next === "string" ? params.next : "/account";
   if (!user) {
     const register = params.mode === "register";
     return <div className="shell page auth-page"><section className="panel auth-card">
-      <img src="/logo.png" alt="" className="auth-logo" width={72} height={72} />
+      <img src="/logo-240.webp" alt="" className="auth-logo" width={72} height={72} />
       <h1>{register ? t("account.create") : t("account.welcome")}</h1>
       <p>{register ? t("account.createLead") : t("account.signInLead")}</p>
       <Notice t={t} error={params.error} success={params.success} />
@@ -50,14 +60,8 @@ export default async function Account({ searchParams }: { searchParams: Promise<
       <p className="auth-switch">{register ? t("account.have") : t("account.new")} <Link className="text-link" href={`/account?${new URLSearchParams({ mode: register ? "login" : "register", next })}`}>{register ? t("account.signInBtn") : t("account.createLink")}</Link></p>
     </section></div>;
   }
-  const tab = tabs.find((value) => value === params.tab) ?? "orders";
   const group: Group = (Object.keys(groups) as Group[]).find((value) => value === params.show) ?? "all";
-  const [orders, favorites, settings, [profile]] = await Promise.all([
-    tab === "orders" ? recentOrders(user.id, "buyer") : Promise.resolve([]),
-    tab === "favorites" ? favoriteEvents(user.id) : Promise.resolve([]),
-    fees(),
-    query<{ seller_requested: boolean; phone: string | null }>("SELECT seller_requested,phone FROM users WHERE id=$1", [user.id]),
-  ]);
+  const [orders, favorites, settings, [profile]] = data!;
   const shown = group === "all" ? orders : orders.filter((order) => groups[group].includes(order.status));
   const tabIcons = { orders: ReceiptText, favorites: Heart, profile: UserRound };
   return <div className="shell page">

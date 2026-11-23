@@ -16,7 +16,7 @@ export const categoryLabel = (t: Translate, category: Category | "") => t(catego
 
 export function Logo({ t }: { t: Translate }) {
   return <Link className="brand" href="/" aria-label={`${t("brand.name")} ${t("brand.tagline")}`}>
-    <img className="brand-mark" src="/logo-96.png" alt="" width={44} height={44} />
+    <img className="brand-mark" src="/logo-144.webp" alt="" width={44} height={44} />
     <span className="brand-words"><span className="brand-name">CRAZY MONKEY</span><span className="brand-sub">{t("brand.tagline")}</span></span>
   </Link>;
 }
@@ -188,11 +188,10 @@ export function Empty({ title, children }: { title: string; children?: React.Rea
   return <div className="empty"><span className="empty-icon"><Ticket size={24} /></span><h3>{title}</h3>{children && <div>{children}</div>}</div>;
 }
 
-export function TrustPills({ t, buyer, seller }: { t: Translate; buyer: string; seller: string }) {
+export function TrustPills({ t }: { t: Translate }) {
   return <ul className="trust-pills">
     <li><ShieldCheck size={17} /> {t("home.trust.escrow")}</li>
     <li><BadgeCheck size={17} /> {t("home.trust.reviewed")}</li>
-    <li><Ticket size={17} /> {t("home.trust.fees", { buyer, seller })}</li>
   </ul>;
 }
 
@@ -204,7 +203,7 @@ export function SectionHead({ title, lead, href, linkLabel, id }: { title: strin
 /** Shown until the database is connected (e.g. right after the first deploy). */
 export function SetupPending({ t }: { t: Translate }) {
   return <main id="content" className="shell page standalone-page">
-    <img src="/logo.png" alt="Crazy Monkey" width={96} height={96} className="landing-logo" />
+    <img src="/logo-384.webp" alt="Crazy Monkey" width={96} height={96} className="landing-logo" />
     <h1>{t("setup.pendingTitle")}</h1>
     <p className="muted">{t("setup.pendingBody")}</p>
   </main>;

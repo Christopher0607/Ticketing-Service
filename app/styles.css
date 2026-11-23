@@ -883,3 +883,7 @@ a.dashboard-row:hover{border-color:#d4af3777}
 .skeleton-detail{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:24px}
 .sk-poster{aspect-ratio:3/4}
 @media (max-width:720px){.skeleton-detail{grid-template-columns:minmax(0,1fr)}.sk-poster{aspect-ratio:4/3}}
+
+/* Breathing room between the events search bar and the category chips */
+.search-bar+.category-nav{margin-top:22px}
+@media (max-width:720px){.search-bar+.category-nav{margin-top:18px}}

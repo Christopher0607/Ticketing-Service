@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, BadgeCheck, CreditCard, Flame, MapPin, ShieldCheck, Ticket, Wallet } from "lucide-react";
 import { site } from "@/lib/config";
-import { fee, money, percent, posterUrl, type Category } from "@/lib/format";
+import { money, posterUrl, type Category } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
 import { categoryCounts, cities, events, fees, latestListings, priceWithFee, spotlight } from "@/lib/market";
 import { HeroCarousel, type Slide } from "@/app/client";
@@ -11,9 +11,6 @@ export default async function Home() {
   const [featured, upcoming, popular, latest, counts, places, settings, { t, f }] = await Promise.all([
     spotlight(5), events({ limit: 8 }), events({ sort: "popular", limit: 8 }), latestListings(6), categoryCounts(), cities(), fees(), i18n(),
   ]);
-  const buyer = percent(settings.buyer_bps);
-  const seller = percent(settings.seller_bps);
-  const example = 30000;
   const groupBuy = site.groupBuyUrl();
   const slides: Slide[] = featured.map((item) => ({
     href: `/events/${item.slug}`, title: item.title, poster: posterUrl(item),
@@ -39,7 +36,7 @@ export default async function Home() {
         <p className="kicker"><span className="pulse" /> {t("home.kicker")}</p>
         <h1 className="brand-title">{t("home.title1")} <em>{t("home.title2")}</em></h1>
         <SearchBar t={t} hero />
-        <TrustPills t={t} buyer={buyer} seller={seller} />
+        <TrustPills t={t} />
       </div>
     </section>
 
@@ -84,22 +81,6 @@ export default async function Home() {
       </div>
     </section>
 
-    <section className="shell fees" aria-labelledby="fees">
-      <div className="fees-copy">
-        <p className="kicker">{t("home.fees.kicker")}</p>
-        <h2 id="fees">{t("home.fees.title")}</h2>
-        <p>{t("home.fees.body", { buyer, seller })}</p>
-        <div className="fee-rates"><span><strong>{buyer}</strong>{t("home.fees.buyerFee")}</span><span><strong>{seller}</strong>{t("home.fees.sellerFee")}</span></div>
-      </div>
-      <div className="fee-ticket" aria-label={t("home.fees.example", { price: money(example) })}>
-        <p className="fee-ticket-title">{t("home.fees.example", { price: money(example) })}</p>
-        <dl>
-          <div><dt>{t("home.fees.ticket")}</dt><dd>{money(example)}</dd></div>
-          <div><dt>{t("home.fees.buyerPays")}</dt><dd className="gold">{money(priceWithFee(example, settings.buyer_bps))}</dd></div>
-          <div><dt>{t("home.fees.sellerGets")}</dt><dd>{money(example - fee(example, settings.seller_bps))}</dd></div>
-        </dl>
-      </div>
-    </section>
 
     <section className="shell home-section faq-preview" aria-labelledby="faq">
       <SectionHead id="faq" title={t("how.faq")} href="/how-it-works" linkLabel={t("home.moreFaq")} />
@@ -108,7 +89,7 @@ export default async function Home() {
 
     <section className="shell cta-grid">
       <div className="cta-card">
-        <img src="/logo.png" alt="" className="cta-logo" width={120} height={120} />
+        <img src="/logo-384.webp" alt="" className="cta-logo" width={120} height={120} />
         <div><h2>{t("home.sell.title")}</h2><p>{t("home.sell.body")}</p></div>
         <Link href="/sell" className="button primary">{t("home.sell.cta")} <ArrowRight size={16} /></Link>
       </div>

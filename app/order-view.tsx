@@ -182,8 +182,8 @@ export async function OrderView({ order, viewer, notice, back }: {
       <aside className="panel summary">
         <h2>{seller && !admin ? t("order.sellerProceeds") : t("order.summary")}</h2>
         <dl><div><dt>{t("order.subtotal")}</dt><dd>{money(order.subtotal)}</dd></div>
-          {(buyer || admin) && <div><dt>{t("order.buyerFee", { pct: percent(order.buyer_bps) })}</dt><dd>{money(order.buyer_fee)}</dd></div>}
-          {(seller || admin) && <div><dt>{t("order.sellerFee", { pct: percent(order.seller_bps) })}</dt><dd>{money(order.seller_fee)}</dd></div>}
+          {(buyer || admin) && <div><dt>{admin ? t("order.buyerFee", { pct: percent(order.buyer_bps) }) : t("order.serviceFee")}</dt><dd>{money(order.buyer_fee)}</dd></div>}
+          {(seller || admin) && <div><dt>{admin ? t("order.sellerFee", { pct: percent(order.seller_bps) }) : t("order.platformFee")}</dt><dd>{money(order.seller_fee)}</dd></div>}
           {(seller || admin) && <div><dt>{t("order.sellerProceeds")}</dt><dd>{money(order.subtotal - order.seller_fee)}</dd></div>}
           {admin && <div><dt>{t("order.commission")}</dt><dd>{money(order.buyer_fee + order.seller_fee)}</dd></div>}
           {(buyer || admin) && <div className="summary-total"><dt>{t("order.total")}</dt><dd>{money(total)}</dd></div>}

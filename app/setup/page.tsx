@@ -18,7 +18,7 @@ export default async function Setup({ searchParams }: { searchParams: Promise<{ 
   if (existing.count > 0) notFound();
   return <main id="content" className="shell page auth-page standalone-page">
     <section className="panel auth-card">
-      <img src="/logo.png" alt="" className="auth-logo" width={72} height={72} />
+      <img src="/logo-240.webp" alt="" className="auth-logo" width={72} height={72} />
       <p className="console-badge"><ShieldCheck size={14} /> {t("setup.badge")}</p>
       <h1>{t("setup.title")}</h1>
       <p>{t("setup.lead")}</p>

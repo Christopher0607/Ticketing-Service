@@ -57,65 +57,74 @@ const filterClause = `e.active AND e.starts_at>now()
   AND ($5::timestamptz IS NULL OR e.starts_at>=$5)
   AND ($6::timestamptz IS NULL OR e.starts_at<$6)`;
 
+/**
+ * Small per-instance cache for data every visitor sees (catalogue, settings). Entries live for a few
+ * seconds; any successful action clears the cache on that instance, and other instances catch up
+ * within the TTL. Orders always read prices, fees and availability inside their own transaction.
+ */
+const memo = globalThis as typeof globalThis & { publicCache?: Map<string, { at: number; value: Promise<unknown> }> };
+function remembered<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const store = memo.publicCache ??= new Map();
+  const hit = store.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
+  if (store.size > 300) for (const [name, entry] of store) if (Date.now() - entry.at >= 60000) store.delete(name);
+  const value = load();
+  store.set(key, { at: Date.now(), value });
+  value.catch(() => store.delete(key));
+  return value;
+}
+export const forgetCached = () => memo.publicCache?.clear();
+const CATALOGUE_TTL = 20000;
+
 function filterValues(filters: EventFilters) {
   const { search = "", category = "", city = "", when = "" } = filters;
   const [from, to] = dateRange(when);
   return [configuredMode(), search, category, city, from, to];
 }
 
-export async function events(filters: EventFilters = {}) {
+export function events(filters: EventFilters = {}) {
+  return remembered(`events:${JSON.stringify(filters)}`, CATALOGUE_TTL, () => eventsUncached(filters));
+}
+
+async function eventsUncached(filters: EventFilters) {
   const { sort = "date", page = 1, limit = 200 } = filters;
   const order = { date: "x.starts_at, x.id", price: "x.lowest ASC NULLS LAST, x.starts_at", popular: "x.score DESC, x.starts_at" }[sort];
   return query<Event>(`SELECT * FROM (SELECT ${eventFields} FROM events e WHERE ${filterClause}) x
     ORDER BY ${order} LIMIT $7 OFFSET $8`, [...filterValues(filters), limit, (Math.max(1, page) - 1) * limit]);
 }
 
-export async function eventCount(filters: EventFilters = {}) {
-  const [row] = await query<{ count: number }>(`SELECT count(*)::int AS count FROM events e WHERE ${filterClause} AND $1::text IS NOT NULL`, filterValues(filters));
-  return row.count;
+export function eventCount(filters: EventFilters = {}) {
+  return remembered(`count:${JSON.stringify(filters)}`, CATALOGUE_TTL, async () => {
+    const [row] = await query<{ count: number }>(`SELECT count(*)::int AS count FROM events e WHERE ${filterClause} AND $1::text IS NOT NULL`, filterValues(filters));
+    return row.count;
+  });
 }
 
 /** Featured events first, then the most in-demand events that have tickets. */
 export function spotlight(limit = 5) {
-  return query<Event>(`SELECT * FROM (SELECT ${eventFields} FROM events e WHERE e.active AND e.starts_at>now()) x
-    WHERE x.featured OR x.tickets>0 ORDER BY x.featured DESC, x.score DESC, x.starts_at LIMIT $2`, [configuredMode(), limit]);
+  return remembered(`spotlight:${limit}`, CATALOGUE_TTL, () => query<Event>(`SELECT * FROM (SELECT ${eventFields} FROM events e WHERE e.active AND e.starts_at>now()) x
+    WHERE x.featured OR x.tickets>0 ORDER BY x.featured DESC, x.score DESC, x.starts_at LIMIT $2`, [configuredMode(), limit]));
 }
 
-export const event = cache(async (slug: string) => {
+export const event = cache((slug: string) => remembered(`event:${slug}`, CATALOGUE_TTL, async () => {
   const [item] = await query<Event>(`SELECT ${eventFields} FROM events e WHERE e.active AND e.slug=$2`, [configuredMode(), slug]);
   return item ?? null;
-});
+}));
 
-/**
- * Small per-instance cache for settings that rarely change and are only displayed (orders always
- * read fees inside their own transaction). Saving the settings clears it on that instance; other
- * instances catch up within the TTL.
- */
-const memo = globalThis as typeof globalThis & { settingsCache?: Map<string, { at: number; value: Promise<unknown> }> };
-function remembered<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
-  const store = memo.settingsCache ??= new Map();
-  const hit = store.get(key);
-  if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
-  const value = load();
-  store.set(key, { at: Date.now(), value });
-  value.catch(() => store.delete(key));
-  return value;
-}
-export const forgetSettings = () => memo.settingsCache?.clear();
 
 export function similarEvents(item: Pick<Event, "id" | "category">, limit = 4) {
-  return query<Event>(`SELECT ${eventFields} FROM events e WHERE e.active AND e.starts_at>now() AND e.category=$2 AND e.id<>$3
-    ORDER BY e.starts_at LIMIT $4`, [configuredMode(), item.category, item.id, limit]);
+  return remembered(`similar:${item.id}:${limit}`, CATALOGUE_TTL, () => query<Event>(`SELECT ${eventFields} FROM events e WHERE e.active AND e.starts_at>now() AND e.category=$2 AND e.id<>$3
+    ORDER BY e.starts_at LIMIT $4`, [configuredMode(), item.category, item.id, limit]));
 }
 
 export function categoryCounts() {
-  return query<{ category: Category; count: number }>(`SELECT category,count(*)::int AS count FROM events
-    WHERE active AND starts_at>now() GROUP BY category`);
+  return remembered("categories", CATALOGUE_TTL, () => query<{ category: Category; count: number }>(`SELECT category,count(*)::int AS count FROM events
+    WHERE active AND starts_at>now() GROUP BY category`));
 }
 
 export function cities() {
-  return query<{ city: string; count: number }>(`SELECT min(city) AS city,count(*)::int AS count FROM events
-    WHERE active AND starts_at>now() GROUP BY lower(city) ORDER BY count(*) DESC, min(city) LIMIT 12`);
+  return remembered("cities", CATALOGUE_TTL, () => query<{ city: string; count: number }>(`SELECT min(city) AS city,count(*)::int AS count FROM events
+    WHERE active AND starts_at>now() GROUP BY lower(city) ORDER BY count(*) DESC, min(city) LIMIT 12`));
 }
 
 export type PublicListing = {
@@ -149,7 +158,7 @@ const listingCardFields = `l.id,l.section,l.price,l.face_value,l.available,f.buy
   WHERE l.status='active' AND l.available>0 AND e.active AND e.starts_at>now() AND ${sellerReady("$1")}`;
 
 export function latestListings(limit = 6) {
-  return query<ListingCard>(`SELECT ${listingCardFields} ORDER BY l.updated_at DESC LIMIT $2`, [configuredMode(), limit]);
+  return remembered(`latest:${limit}`, CATALOGUE_TTL, () => query<ListingCard>(`SELECT ${listingCardFields} ORDER BY l.updated_at DESC LIMIT $2`, [configuredMode(), limit]));
 }
 
 export type SellerProfile = { id: string; name: string; created_at: Date; sales: number; rating: number | null; reviews: number };
@@ -178,6 +187,13 @@ export function favoriteEvents(userId: string) {
 
 export async function isFavorite(userId: string, eventId: string) {
   return (await query("SELECT 1 FROM favorites WHERE user_id=$1 AND event_id=$2", [userId, eventId])).length > 0;
+}
+
+/** Whether the visitor with this session has saved the event; runs without waiting for the user lookup. */
+export async function isFavoriteForSession(sessionHash: string | null, slug: string) {
+  if (!sessionHash) return false;
+  return (await query(`SELECT 1 FROM favorites f JOIN sessions s ON s.user_id=f.user_id JOIN events e ON e.id=f.event_id
+    WHERE s.token_hash=$1 AND s.expires_at>now() AND e.slug=$2`, [sessionHash, slug])).length > 0;
 }
 
 export async function sellerSummary(userId: string) {

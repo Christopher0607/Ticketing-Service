@@ -1,5 +1,5 @@
 import { Landmark, Wallet } from "lucide-react";
-import { requireSeller } from "@/lib/auth";
+import { loadFor, requireSeller } from "@/lib/auth";
 import { paymentMode } from "@/lib/config";
 import { query } from "@/lib/db";
 import { money } from "@/lib/format";
@@ -11,10 +11,10 @@ import { Notice } from "@/app/ui";
 export const metadata = { title: "Payouts" };
 
 export default async function SellerPayouts({ searchParams }: { searchParams: Promise<{ error?: string; success?: string; connect?: string }> }) {
-  const [user, params, { t, f }] = await Promise.all([requireSeller("/sell/payouts"), searchParams, i18n()]);
-  const [summary, history] = await Promise.all([sellerSummary(user.id), query<{ id: string; title: string; settled_at: Date; amount: number; payout_ref: string | null }>(`
+  const [[user, loaded], params, { t, f }] = await Promise.all([loadFor(requireSeller("/sell/payouts"), (id) => Promise.all([sellerSummary(id), query<{ id: string; title: string; settled_at: Date; amount: number; payout_ref: string | null }>(`
     SELECT o.id,e.title,o.settled_at,(o.subtotal-o.seller_fee) AS amount,o.payout_ref FROM orders o JOIN listings l ON l.id=o.listing_id JOIN events e ON e.id=l.event_id
-    WHERE l.seller_id=$1 AND o.settled_at IS NOT NULL ORDER BY o.settled_at DESC LIMIT 100`, [user.id])]);
+    WHERE l.seller_id=$1 AND o.settled_at IS NOT NULL ORDER BY o.settled_at DESC LIMIT 100`, [id])])), searchParams, i18n()]);
+  const [summary, history] = loaded!;
   const mode = paymentMode();
   return <>
     <div className="page-heading"><h1>{t("seller.nav.payouts")}</h1><p>{t("seller.payoutsLead")}</p></div>
