@@ -20,7 +20,7 @@ export async function sendEmail(to: string | null | undefined, subject: string, 
       signal: AbortSignal.timeout(6000),
       body: JSON.stringify({
         from: process.env.MAIL_FROM, to: [to], ...replyTo(), subject: `Crazy Monkey 票务 · ${subject}`,
-        text: [...lines, "", "—", "Crazy Monkey Tickets · 马来西亚安心门票转让平台", site()].join("\n"),
+        text: [...lines, "", "—", "Crazy Monkey Ticketing · 马来西亚安心门票转让平台", site()].join("\n"),
       }),
     });
     if (!response.ok) console.error("Notification email rejected", response.status);

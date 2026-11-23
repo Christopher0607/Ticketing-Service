@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 // Lets buyers "install" the site to their home screen like an app, at no extra cost.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Crazy Monkey Tickets",
+    name: "Crazy Monkey Ticketing",
     short_name: "Crazy Monkey",
     description: "Malaysia’s safe ticket resale marketplace · 马来西亚安心门票转让平台",
     start_url: "/",

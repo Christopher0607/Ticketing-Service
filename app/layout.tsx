@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase,
     title: { default: t("meta.title"), template: `%s | ${t("brand.name")} ${t("brand.tagline")}` },
     description: t("meta.description"),
-    applicationName: "Crazy Monkey Tickets",
+    applicationName: "Crazy Monkey Ticketing",
     appleWebApp: { capable: true, title: "Crazy Monkey", statusBarStyle: "black-translucent" },
   };
 }

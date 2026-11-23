@@ -40,7 +40,7 @@ export async function Header() {
         <Link className="account-link" aria-label={user ? t("nav.account") : t("nav.signIn")} href="/account"><UserRound size={17} /><span>{user ? t("nav.account") : t("nav.signIn")}</span></Link>
       </div>
     </div></header>
-    <TabBar labels={{ home: t("nav.home"), explore: t("nav.explore"), sell: user?.role === "admin" ? t("nav.admin") : user?.role === "seller" ? t("seller.title") : t("nav.sell"), account: t("nav.account") }}
+    <TabBar labels={{ home: t("nav.home"), explore: t("nav.explore"), sell: user?.role === "admin" ? t("nav.admin") : user?.role === "seller" ? t("tab.seller") : t("tab.sell"), account: t("nav.account") }}
       sellHref={user?.role === "admin" ? "/admin" : "/sell"} />
   </>;
 }

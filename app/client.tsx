@@ -190,8 +190,8 @@ export function PriceFields({ sellerBps, capBps, labels }: {
       <label>{labels.price}<input name="price" type="number" min={2} max={25000} step=".01" required inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></label>
     </div>
     {priceSen !== null && priceSen > 0 && <div className={overCap ? "price-preview over" : "price-preview"} aria-live="polite">
-      <span>{labels.platformFee} <strong>−{rm(fee(priceSen, sellerBps))}</strong></span>
       <span>{labels.youGet} <strong>{rm(priceSen - fee(priceSen, sellerBps))}</strong></span>
+      <small className="fee-note">{labels.platformFee.replace("{amount}", rm(fee(priceSen, sellerBps)))}</small>
       {overCap && <em>{labels.overCap}</em>}
     </div>}
   </>;

@@ -181,7 +181,7 @@ test("the admin console, seller centre and customer site are separate", async ({
   }
   await seller.goto("/sell/new");
   await seller.locator(".list-form").getByLabel("Price per ticket (RM)").fill("100");
-  await expect(seller.locator(".price-preview")).toContainText("Platform service fee (3%) −RM3");
+  await expect(seller.locator(".price-preview .fee-note")).toHaveText("Platform service fee (3%) of RM3 already deducted");
   await expect(seller.locator(".price-preview")).not.toContainText("Buyer pays");
   await expect(seller.locator(".price-preview")).toContainText("You receive RM97");
   await expect(seller.locator(".topbar")).toHaveCount(1);

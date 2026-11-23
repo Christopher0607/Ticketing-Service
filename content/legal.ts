@@ -12,10 +12,10 @@ export const legalUpdated = "2026-11-22";
 const en: Record<LegalSlug, LegalDoc> = {
   terms: {
     title: "Terms of Service",
-    summary: "These terms govern your use of Crazy Monkey Tickets, a marketplace where fans buy and resell live event tickets with payment protection.",
+    summary: "These terms govern your use of Crazy Monkey Ticketing, a marketplace where fans buy and resell live event tickets with payment protection.",
     sections: [
       { id: "about", heading: "1. About us and these terms", body: [
-        "Crazy Monkey Tickets (the \"Platform\") is operated by {company} (Company No. {regNo}), {address} (\"we\", \"us\", \"our\"). The Platform is available at {site}.",
+        "Crazy Monkey Ticketing (the \"Platform\") is operated by {company} (Company No. {regNo}), {address} (\"we\", \"us\", \"our\"). The Platform is available at {site}.",
         "By creating an account, listing, buying or otherwise using the Platform, you agree to these Terms of Service, our Privacy Policy and our Refund & Buyer Guarantee Policy (together, the \"Terms\"). If you do not agree, do not use the Platform.",
         "You must be at least 18 years old, or use the Platform with the consent and supervision of a parent or legal guardian.",
       ] },
@@ -87,7 +87,7 @@ const en: Record<LegalSlug, LegalDoc> = {
     summary: "How we collect, use, disclose and protect your personal data in accordance with the Personal Data Protection Act 2010 (PDPA) of Malaysia.",
     sections: [
       { id: "who", heading: "1. Who we are", body: [
-        "{company} (Company No. {regNo}), {address}, operates Crazy Monkey Tickets and is the data user responsible for your personal data. Our Data Protection Officer can be reached at {email}.",
+        "{company} (Company No. {regNo}), {address}, operates Crazy Monkey Ticketing and is the data user responsible for your personal data. Our Data Protection Officer can be reached at {email}.",
       ] },
       { id: "collect", heading: "2. Personal data we collect", body: [
         "- Account details: name, email address and an encrypted (hashed) password.",

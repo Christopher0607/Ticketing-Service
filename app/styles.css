@@ -887,3 +887,11 @@ a.dashboard-row:hover{border-color:#d4af3777}
 /* Breathing room between the events search bar and the category chips */
 .search-bar+.category-nav{margin-top:22px}
 @media (max-width:720px){.search-bar+.category-nav{margin-top:18px}}
+
+/* Mobile tab bar labels stay on one line */
+.tabbar a span{display:block;max-width:100%;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Listing form: the platform fee is a quiet note under what the seller receives */
+.price-preview .fee-note{flex-basis:100%;font-size:.82rem;font-weight:400;color:var(--muted)}
+/* Home kicker: keep the dot with the first word when the line wraps */
+.search-band .kicker{display:block;text-align:center}
+.search-band .kicker .pulse{display:inline-block;vertical-align:middle;margin:-3px 8px 0 0}
