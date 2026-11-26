@@ -30,6 +30,15 @@ test("mobile catalogue works without horizontal page overflow", async ({ page })
   expect(await fits()).toBe(true);
 });
 
+test("the Instagram account is linked with the contact options", async ({ page }) => {
+  for (const path of ["/", "/about", "/how-it-works"]) {
+    await page.goto(path);
+    const link = page.getByRole("link", { name: "Instagram" }).first();
+    await expect(link).toHaveAttribute("href", "https://www.instagram.com/crazymonkeyticketing/");
+    await expect(link).toHaveAttribute("target", "_blank");
+  }
+});
+
 test("the hosting provider's badge is never shown or clickable", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#nl-badge-frame")).toBeHidden();

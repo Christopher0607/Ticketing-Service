@@ -45,14 +45,24 @@ export async function Header() {
   </>;
 }
 
+/** Outline Instagram glyph drawn to match the other line icons (the icon set has no brand logos). */
+function InstagramIcon({ size = 17 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
+  </svg>;
+}
+
 export function SupportLinks({ t, order }: { t: Translate; order?: string }) {
   const whatsapp = site.whatsapp();
   const email = site.supportEmail();
-  if (!whatsapp && !email) return null;
+  // Order pages keep to WhatsApp and email, which carry the order number; elsewhere Instagram is offered too.
+  const instagram = order ? null : site.instagramUrl;
+  if (!whatsapp && !email && !instagram) return null;
   const subject = order ? `Crazy Monkey order ${shortId(order)}` : "";
   return <div className="support-links">
     {whatsapp && <a className="support-link whatsapp" href={`https://wa.me/${whatsapp}${order ? `?text=${encodeURIComponent(subject)}` : ""}`} target="_blank" rel="noreferrer"><MessageCircle size={17} /> {t("support.whatsapp")}</a>}
     {email && <a className="support-link" href={`mailto:${email}${order ? `?subject=${encodeURIComponent(subject)}` : ""}`}><Mail size={17} /> {t("support.email")}</a>}
+    {instagram && <a className="support-link instagram" href={instagram} target="_blank" rel="noreferrer"><InstagramIcon /> {t("support.instagram")}</a>}
   </div>;
 }
 

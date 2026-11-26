@@ -31,6 +31,7 @@ export const en = {
   "support.contact": "Contact support",
   "support.whatsapp": "WhatsApp support",
   "support.email": "Email support",
+  "support.instagram": "Instagram",
 
   "cat.all": "All events",
   "cat.Concerts": "Concerts",
@@ -796,6 +797,7 @@ export const zh: Record<MessageKey, string> = {
   "support.contact": "联系客服",
   "support.whatsapp": "WhatsApp 客服",
   "support.email": "邮件客服",
+  "support.instagram": "Instagram",
 
   "cat.all": "全部活动",
   "cat.Concerts": "演唱会",

@@ -195,6 +195,7 @@ hr{border:0;border-top:1px solid var(--line);margin:1.3rem 0}
 .support-link{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);border-radius:999px;padding:7px 13px;font-size:.86rem;font-weight:700}
 .support-link:hover{border-color:var(--gold);color:var(--gold-2)}
 .support-link.whatsapp svg{color:#5fd38a}
+.support-link.instagram svg{color:#f07aa8}
 
 /* Pages */
 .page{padding-block:34px 80px}

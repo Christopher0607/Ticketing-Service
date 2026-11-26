@@ -72,6 +72,8 @@ export const site = {
   adminHost: () => process.env.ADMIN_HOST?.trim().toLowerCase() || null,
   /** Link to the Crazy Monkey group-buy site. */
   groupBuyUrl: () => publicHttps(process.env.GROUPBUY_URL),
+  /** Official Instagram account, shown with the contact links. */
+  instagramUrl: "https://www.instagram.com/crazymonkeyticketing/",
   /** Official social profiles, linked in the site's structured data for search engines. */
   socialProfiles: ["https://www.instagram.com/crazymonkeyticketing/"],
 };
