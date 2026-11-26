@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, BadgeCheck, CreditCard, Flame, MapPin, ShieldCheck, Ticket, Wallet } from "lucide-react";
-import { site } from "@/lib/config";
+import { appUrl, site } from "@/lib/config";
 import { money, posterUrl, type Category } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
 import { categoryCounts, cities, events, fees, latestListings, priceWithFee, spotlight } from "@/lib/market";
@@ -27,7 +27,15 @@ export default async function Home() {
     [Wallet, "home.step4.title", "home.step4.body"],
   ] as const;
   const faq = [["how.q4", "how.a4"], ["how.q2", "how.a2"], ["how.q5", "how.a5"], ["how.q7", "how.a7"]] as const;
+  // Tells search engines the site's name and logo (shown next to it in results).
+  let origin = "https://crazymonkeyticketing.com";
+  try { origin = appUrl(); } catch { /* local default */ }
+  const structured = [
+    { "@context": "https://schema.org", "@type": "WebSite", name: "Crazy Monkey Ticketing", alternateName: ["Crazy Monkey 票务", "Crazy Monkey"], url: `${origin}/` },
+    { "@context": "https://schema.org", "@type": "Organization", name: "Crazy Monkey Ticketing", url: `${origin}/`, logo: `${origin}/logo.png`, sameAs: site.socialProfiles },
+  ];
   return <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structured).replace(/</g, "\\u003c") }} />
     {slides.length > 0 ? <HeroCarousel slides={slides} label={t("home.featured")} previous={t("home.prev")} next={t("home.next")} /> :
       <div className="hero hero-compact"><div className="hero-art" aria-hidden="true"><img src="/images/hero.webp" alt="" /></div></div>}
 

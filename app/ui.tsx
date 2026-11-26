@@ -7,7 +7,7 @@ import { currentUser } from "@/lib/auth";
 import { site } from "@/lib/config";
 import { categories, money, posterUrl, shortId, type Category, type Formatters } from "@/lib/format";
 import { i18n, type MessageKey, type Translate } from "@/lib/i18n";
-import { priceWithFee, type Event, type ListingCard } from "@/lib/market";
+import { companyDetails, priceWithFee, type Event, type ListingCard } from "@/lib/market";
 import { CopyButton, LangSwitch, TabBar } from "./client";
 
 export const categoryIcons = { Concerts: Music2, Festivals: Sparkles, Sports: Trophy, "Arts & Theatre": Clapperboard };
@@ -57,9 +57,8 @@ export function SupportLinks({ t, order }: { t: Translate; order?: string }) {
 }
 
 export async function Footer() {
-  const { t } = await i18n();
+  const [{ t }, company] = await Promise.all([i18n(), companyDetails()]);
   const groupBuy = site.groupBuyUrl();
-  const company = site.company();
   return <footer className="footer"><div className="shell">
     <div className="footer-grid">
       <div className="footer-brand"><Logo t={t} /><p>{t("footer.about")}</p><SupportLinks t={t} /></div>

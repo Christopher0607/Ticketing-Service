@@ -1,18 +1,18 @@
-import { CheckCircle2, CircleAlert, Percent, QrCode, ServerCog } from "lucide-react";
+import { Building2, CheckCircle2, CircleAlert, Percent, QrCode, ServerCog } from "lucide-react";
 import { paymentMode } from "@/lib/config";
 import { mediaUrl } from "@/lib/format";
 import { mailConfigured } from "@/lib/identity";
 import { i18n } from "@/lib/i18n";
-import { fees, paymentConfigured, paymentSettings } from "@/lib/market";
+import { companyDetails, fees, paymentConfigured, paymentSettings } from "@/lib/market";
 import { remoteStorage } from "@/lib/storage";
-import { savePaymentSettings, updateFees } from "@/app/actions";
+import { saveCompanySettings, savePaymentSettings, updateFees } from "@/app/actions";
 import { ImageField } from "@/app/client";
 import { Notice } from "@/app/ui";
 
 export const metadata = { title: "Settings" };
 
 export default async function AdminSettings({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
-  const [params, { t }, settings, pay] = await Promise.all([searchParams, i18n(), fees(), paymentSettings()]);
+  const [params, { t }, settings, pay, company] = await Promise.all([searchParams, i18n(), fees(), paymentSettings(), companyDetails()]);
   const mode = paymentMode();
   const checks: [boolean, string][] = [
     [Boolean(mode), t("admin.mode", { mode: mode ? t(`mode.${mode}`) : t("admin.modeNone") })],
@@ -20,7 +20,7 @@ export default async function AdminSettings({ searchParams }: { searchParams: Pr
     [remoteStorage(), remoteStorage() ? t("console.check.storageRemote") : t("console.check.storageDb")],
     [mailConfigured(), mailConfigured() ? t("console.check.mail") : t("console.check.noMail")],
     [process.env.LEGAL_REVIEWED === "true", t("console.check.legal")],
-    [Boolean(process.env.COMPANY_NAME), t("console.check.company")],
+    [Boolean(company.name), t("console.check.company")],
   ];
   return <>
     <div className="page-heading"><h1>{t("admin.tab.settings")}</h1><p>{t("console.settingsLead")}</p></div>
@@ -48,6 +48,15 @@ export default async function AdminSettings({ searchParams }: { searchParams: Pr
           </div>
           <label>{t("admin.note")}<textarea name="note" maxLength={300} defaultValue={pay.note ?? ""} /></label>
           <button className="button primary">{t("admin.savePayment")}</button>
+        </form>
+      </section>
+      <section className="panel admin-panel"><h2><Building2 size={20} /> {t("admin.company")}</h2>
+        <p className="muted">{t("admin.companyLead")}</p>
+        <form action={saveCompanySettings} className="form-stack">
+          <label>{t("admin.companyName")}<input name="company name" maxLength={120} defaultValue={company.name ?? ""} /></label>
+          <label>{t("admin.companyRegNo")}<input name="company reg no" maxLength={40} defaultValue={company.regNo ?? ""} /></label>
+          <label>{t("admin.companyAddress")}<textarea name="company address" maxLength={300} defaultValue={company.address ?? ""} /></label>
+          <button className="button primary">{t("admin.saveCompany")}</button>
         </form>
       </section>
     </div>

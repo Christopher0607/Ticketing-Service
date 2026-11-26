@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BadgeCheck, HandCoins, Headset, ShieldCheck } from "lucide-react";
 import { site } from "@/lib/config";
 import { i18n } from "@/lib/i18n";
+import { companyDetails } from "@/lib/market";
 import { SupportLinks } from "@/app/ui";
 
 export async function generateMetadata() {
@@ -10,8 +11,7 @@ export async function generateMetadata() {
 }
 
 export default async function About() {
-  const { t } = await i18n();
-  const company = site.company();
+  const [{ t }, company] = await Promise.all([i18n(), companyDetails()]);
   const values = [
     [HandCoins, "about.v1.title", "about.v1.body"],
     [ShieldCheck, "about.v2.title", "about.v2.body"],
@@ -23,11 +23,10 @@ export default async function About() {
     <section className="panel about-story"><h2>{t("about.storyTitle")}</h2><p>{t("about.story1")}</p><p>{t("about.story2")}</p></section>
     <div className="feature-grid four">{values.map(([Icon, title, body]) => <div key={title} className="panel feature">
       <span className="feature-icon"><Icon size={22} /></span><h2>{t(title)}</h2><p>{t(body)}</p></div>)}</div>
-    <section className="panel about-company"><h2>{t("about.company")}</h2>
-      {company.name ? <p>{company.name}{company.regNo && ` (${company.regNo})`}{company.address && <><br />{company.address}</>}</p>
-        : <p className="muted">{t("about.companyPending")}</p>}
+    {(company.name || site.whatsapp() || site.supportEmail()) && <section className="panel about-company"><h2>{company.name ? t("about.company") : t("about.contact")}</h2>
+      {company.name && <p>{company.name}{company.regNo && ` (${company.regNo})`}{company.address && <><br />{company.address}</>}</p>}
       <SupportLinks t={t} />
-    </section>
+    </section>}
     <div className="inline-form centered-row"><Link href="/events" className="button primary">{t("account.explore")}</Link><Link href="/sell" className="button outline">{t("nav.sell")}</Link></div>
   </div>;
 }

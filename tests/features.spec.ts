@@ -193,3 +193,43 @@ test("the admin console, seller centre and customer site are separate", async ({
   await expect(buyer.getByRole("heading", { name: "Sell tickets on Crazy Monkey" })).toBeVisible();
   await buyer.context().close();
 });
+
+test("company details stay hidden until the admin fills them in", async ({ browser, baseURL }) => {
+  const admin = await signedIn(browser, baseURL, "admin@example.test");
+  const db = new pg.Client({ connectionString: dbUrl });
+  await db.connect();
+  const save = async (name: string, regNo: string, address: string) => {
+    await admin.goto("/admin/settings");
+    await admin.getByLabel("Company name").fill(name);
+    await admin.getByLabel("SSM registration no.").fill(regNo);
+    await admin.getByLabel("Registered address").fill(address);
+    await admin.getByRole("button", { name: "Save company details" }).click();
+  };
+  try {
+    await db.query("UPDATE company_settings SET name=NULL,reg_no=NULL,address=NULL");
+    await admin.goto("/legal/terms");
+    await expect(admin.getByText('Crazy Monkey Ticketing (the "Platform", "we", "us", "our") is available at')).toBeVisible();
+    await expect(admin.getByText("Company No.")).toHaveCount(0);
+    await admin.goto("/about");
+    await expect(admin.getByRole("heading", { name: "Company information" })).toHaveCount(0);
+
+    await save("QA Holdings Sdn. Bhd.", "", "");
+    await expect(admin.locator(".notice.error")).toHaveText("Fill in the company name, registration number and address together, or leave all three empty.");
+
+    await save("QA Holdings Sdn. Bhd.", "202601999999", "1 Jalan QA, Kuala Lumpur");
+    await expect(admin.getByText("Company details saved.")).toBeVisible();
+    await admin.goto("/legal/terms");
+    await expect(admin.getByText("is operated by QA Holdings Sdn. Bhd. (Company No. 202601999999), 1 Jalan QA, Kuala Lumpur")).toBeVisible();
+    await expect(admin.locator(".copyright")).toContainText("QA Holdings Sdn. Bhd. (202601999999)");
+
+    await save("", "", "");
+    await expect(admin.getByText("Company details saved.")).toBeVisible();
+    await admin.goto("/legal/privacy");
+    await expect(admin.getByText("Crazy Monkey Ticketing is the data user responsible for your personal data.")).toBeVisible();
+    await expect(admin.locator(".copyright")).not.toContainText("QA Holdings");
+  } finally {
+    await db.query("UPDATE company_settings SET name=NULL,reg_no=NULL,address=NULL");
+    await db.end();
+    await admin.context().close();
+  }
+});

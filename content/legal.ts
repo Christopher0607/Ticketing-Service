@@ -1,9 +1,11 @@
 // Draft legal documents for review by the company's lawyer before launch.
 // English is the governing version; the Chinese text is a translation.
 // Placeholders: {company} {regNo} {address} {email} {site} {buyerFee} {sellerFee}
-// Body lines starting with "- " render as bullet points.
+// Body lines starting with "- " render as bullet points. A line given as { company, plain } uses
+// `company` once the company details are set in the admin settings, and `plain` until then.
 
-export type LegalSection = { id: string; heading: string; body: string[] };
+export type LegalLine = string | { company: string; plain: string };
+export type LegalSection = { id: string; heading: string; body: LegalLine[] };
 export type LegalDoc = { title: string; summary: string; sections: LegalSection[] };
 export const legalSlugs = ["terms", "privacy", "refunds"] as const;
 export type LegalSlug = (typeof legalSlugs)[number];
@@ -15,7 +17,8 @@ const en: Record<LegalSlug, LegalDoc> = {
     summary: "These terms govern your use of Crazy Monkey Ticketing, a marketplace where fans buy and resell live event tickets with payment protection.",
     sections: [
       { id: "about", heading: "1. About us and these terms", body: [
-        "Crazy Monkey Ticketing (the \"Platform\") is operated by {company} (Company No. {regNo}), {address} (\"we\", \"us\", \"our\"). The Platform is available at {site}.",
+        { company: "Crazy Monkey Ticketing (the \"Platform\") is operated by {company} (Company No. {regNo}), {address} (\"we\", \"us\", \"our\"). The Platform is available at {site}.",
+          plain: "Crazy Monkey Ticketing (the \"Platform\", \"we\", \"us\", \"our\") is available at {site}." },
         "By creating an account, listing, buying or otherwise using the Platform, you agree to these Terms of Service, our Privacy Policy and our Refund & Buyer Guarantee Policy (together, the \"Terms\"). If you do not agree, do not use the Platform.",
         "You must be at least 18 years old, or use the Platform with the consent and supervision of a parent or legal guardian.",
       ] },
@@ -87,7 +90,8 @@ const en: Record<LegalSlug, LegalDoc> = {
     summary: "How we collect, use, disclose and protect your personal data in accordance with the Personal Data Protection Act 2010 (PDPA) of Malaysia.",
     sections: [
       { id: "who", heading: "1. Who we are", body: [
-        "{company} (Company No. {regNo}), {address}, operates Crazy Monkey Ticketing and is the data user responsible for your personal data. Our Data Protection Officer can be reached at {email}.",
+        { company: "{company} (Company No. {regNo}), {address}, operates Crazy Monkey Ticketing and is the data user responsible for your personal data. Our Data Protection Officer can be reached at {email}.",
+          plain: "Crazy Monkey Ticketing is the data user responsible for your personal data. Our Data Protection Officer can be reached at {email}." },
       ] },
       { id: "collect", heading: "2. Personal data we collect", body: [
         "- Account details: name, email address and an encrypted (hashed) password.",
@@ -181,7 +185,8 @@ const zh: Record<LegalSlug, LegalDoc> = {
     summary: "本条款适用于你使用 Crazy Monkey 票务——一个提供付款保障、让粉丝买卖和转让现场活动门票的平台。",
     sections: [
       { id: "about", heading: "1. 关于我们与本条款", body: [
-        "Crazy Monkey 票务（“平台”）由 {company}（公司注册号 {regNo}，地址：{address}）经营（“我们”）。平台网址为 {site}。",
+        { company: "Crazy Monkey 票务（“平台”）由 {company}（公司注册号 {regNo}，地址：{address}）经营（“我们”）。平台网址为 {site}。",
+          plain: "Crazy Monkey 票务（“平台”或“我们”）的网址为 {site}。" },
         "注册账户、挂单、购票或以其他方式使用平台，即表示你同意本服务条款、《隐私政策》及《退款与买家保障政策》（合称“条款”）。如不同意，请勿使用平台。",
         "你必须年满 18 岁，或在父母/法定监护人同意和监督下使用平台。",
       ] },
@@ -253,7 +258,8 @@ const zh: Record<LegalSlug, LegalDoc> = {
     summary: "我们如何依照马来西亚《2010 年个人资料保护法》（PDPA）收集、使用、披露和保护你的个人资料。",
     sections: [
       { id: "who", heading: "1. 我们是谁", body: [
-        "{company}（公司注册号 {regNo}，地址：{address}）经营 Crazy Monkey 票务，是负责处理你个人资料的资料使用者。我们的资料保护官联系方式：{email}。",
+        { company: "{company}（公司注册号 {regNo}，地址：{address}）经营 Crazy Monkey 票务，是负责处理你个人资料的资料使用者。我们的资料保护官联系方式：{email}。",
+          plain: "Crazy Monkey 票务是负责处理你个人资料的资料使用者。我们的资料保护官联系方式：{email}。" },
       ] },
       { id: "collect", heading: "2. 我们收集的个人资料", body: [
         "- 账户资料：姓名、邮箱及加密（哈希）后的密码。",

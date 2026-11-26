@@ -224,6 +224,18 @@ export function paymentSettings() {
     "SELECT bank_name,account_name,account_number,duitnow_id,qr_id,note,(SELECT remote FROM media WHERE id=qr_id) AS qr_remote FROM payment_settings"))[0]);
 }
 
+export type CompanyDetails = { name: string | null; regNo: string | null; address: string | null };
+
+/** Company details from the admin settings (falling back to COMPANY_* variables); all null until provided. */
+export function companyDetails(): Promise<CompanyDetails> {
+  return remembered("company", 30000, async () => {
+    const [row] = await query<{ name: string | null; reg_no: string | null; address: string | null }>("SELECT name,reg_no,address FROM company_settings");
+    const pick = (value: string | null | undefined, fallback: string | undefined) => value?.trim() || fallback?.trim() || null;
+    const details = { name: pick(row?.name, process.env.COMPANY_NAME), regNo: pick(row?.reg_no, process.env.COMPANY_REG_NO), address: pick(row?.address, process.env.COMPANY_ADDRESS) };
+    return details.name ? details : { name: null, regNo: null, address: null };
+  });
+}
+
 export const paymentConfigured = (settings: PaymentSettings) =>
   Boolean(settings.qr_id || settings.duitnow_id || (settings.bank_name && settings.account_number));
 

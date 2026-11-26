@@ -5,7 +5,7 @@ import { legalDocs, legalSlugs, legalUpdated, type LegalSlug } from "@/content/l
 import { appUrl, site } from "@/lib/config";
 import { percent } from "@/lib/format";
 import { i18n } from "@/lib/i18n";
-import { fees } from "@/lib/market";
+import { companyDetails, fees } from "@/lib/market";
 
 type Params = { params: Promise<{ doc: string }> };
 const isSlug = (value: string): value is LegalSlug => (legalSlugs as readonly string[]).includes(value);
@@ -16,13 +16,12 @@ export async function generateMetadata({ params }: Params) {
 }
 
 export default async function LegalPage({ params }: Params) {
-  const [{ doc }, { t, locale, f }, settings] = await Promise.all([params, i18n(), fees()]);
+  const [{ doc }, { t, locale, f }, settings, company] = await Promise.all([params, i18n(), fees(), companyDetails()]);
   if (!isSlug(doc)) notFound();
-  const company = site.company();
   let url = "http://localhost:3000";
   try { url = appUrl(); } catch { /* local default */ }
   const values: Record<string, string> = {
-    company: company.name ?? t("company.pending"), regNo: company.regNo ?? t("company.pending"), address: company.address ?? t("company.pending"),
+    company: company.name ?? "", regNo: company.regNo ?? "", address: company.address ?? "",
     email: site.supportEmail() ?? "[support email]", site: url,
     buyerFee: percent(settings.buyer_bps), sellerFee: percent(settings.seller_bps),
   };
@@ -42,7 +41,8 @@ export default async function LegalPage({ params }: Params) {
           const blocks: React.ReactNode[] = [];
           let items: string[] = [];
           const flush = () => { if (items.length) { blocks.push(<ul key={`l${blocks.length}`}>{items.map((item) => <li key={item}>{fill(item)}</li>)}</ul>); items = []; } };
-          for (const line of section.body) {
+          for (const entry of section.body) {
+            const line = typeof entry === "string" ? entry : company.name ? entry.company : entry.plain;
             if (line.startsWith("- ")) items.push(line.slice(2));
             else { flush(); blocks.push(<p key={`p${blocks.length}`}>{fill(line)}</p>); }
           }

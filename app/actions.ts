@@ -363,6 +363,19 @@ export async function updateFees(form: FormData) {
   message(path, "success", "ok.ratesUpdated");
 }
 
+export async function saveCompanySettings(form: FormData) {
+  const path = "/admin/settings";
+  await requireAdmin(path);
+  await attempt(path, async () => {
+    // optional() may throw for over-long text, so validate inside attempt
+    const values = [optional(form, "company name", 120), optional(form, "company reg no", 40), optional(form, "company address", 300)];
+    const filled = values.filter(Boolean).length;
+    if (filled !== 0 && filled !== values.length) throw new ActionError("err.companyIncomplete");
+    await query("UPDATE company_settings SET name=$1,reg_no=$2,address=$3", values);
+  });
+  message(path, "success", "ok.companySaved");
+}
+
 export async function savePaymentSettings(form: FormData) {
   const path = "/admin/settings";
   await requireAdmin(path);
