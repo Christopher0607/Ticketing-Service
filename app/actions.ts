@@ -49,6 +49,13 @@ function httpsUrl(value: string) {
   if (url.protocol !== "https:" || url.username || url.password || url.port) throw new ActionError("err.url");
   return url;
 }
+/** Optional website: empty or "无"/"none"/"-" means none; "www.example.com" becomes https://www.example.com. */
+function optionalUrl(value: string) {
+  const text = value.trim();
+  if (!text || /^(无|無|没有|沒有|none|nil|n\/?a|-+|—+)$/i.test(text)) return null;
+  const withScheme = /^https?:\/\//i.test(text) ? text.replace(/^http:\/\//i, "https://") : `https://${text}`;
+  return httpsUrl(withScheme);
+}
 /** Malaysian numbers typed as 012… become 6012…; stored as digits only. */
 function phone(form: FormData) {
   let digits = field(form, "phone").replace(/[\s()+-]/g, "");
@@ -227,7 +234,7 @@ export async function deliverOrder(form: FormData) {
     if (!order || order.seller_id !== user.id) throw new ActionError("err.orderUnavailable");
     const reference = text(form, "reference", 2, 180);
     const link = field(form, "link") ? httpsUrl(field(form, "link")) : null;
-    if (link && link.hostname !== order.transfer_host) throw new ActionError("err.officialDomain");
+    if (link && order.transfer_host && link.hostname !== order.transfer_host) throw new ActionError("err.officialDomain");
     const [updated] = await query(`UPDATE orders SET status='delivered',transfer_ref=$2,transfer_url=$3,delivered_at=now()
       WHERE id=$1 AND status='paid' RETURNING id`, [orderId, reference, link?.href ?? null]);
     if (!updated) throw new ActionError("err.cannotTransfer");
@@ -403,13 +410,13 @@ async function eventFields(form: FormData, requireUpcoming: boolean) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(start) || Number.isNaN(date.getTime()) ||
       (requireUpcoming && !(date.getTime() > Date.now() + 2700000))) throw new ActionError("err.upcomingDate");
   if (!categories.some((value) => value === category)) throw new ActionError("err.category");
-  const policy = httpsUrl(field(form, "policy"));
-  const transfer = httpsUrl(field(form, "transfer site"));
+  const policy = optionalUrl(field(form, "policy"));
+  const transfer = optionalUrl(field(form, "transfer site"));
   const image = { Concerts: "concert", Festivals: "festival", Sports: "sports", "Arts & Theatre": "theatre" }[category];
   const poster = await readImage(form.get("poster"), { width: 1200, height: 1600 });
   const seatmap = await readImage(form.get("seatmap"), { width: 2000, height: 2000 });
   return {
-    title, category, image, date, policy: policy.href, transferHost: transfer.hostname, poster, seatmap,
+    title, category, image, date, policy: policy?.href ?? null, transferHost: transfer?.hostname ?? null, poster, seatmap,
     address: optional(form, "address", 200),
     venue: text(form, "venue", 2, 100), city: text(form, "city", 2, 80), description: text(form, "description", 10, 1500),
     featured: field(form, "featured") === "on",

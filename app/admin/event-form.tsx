@@ -20,8 +20,9 @@ export function EventForm({ t, action, item }: { t: Translate; action: (form: Fo
     <label>{t("admin.ev.address")}<input name="address" maxLength={200} defaultValue={item?.venue_address ?? undefined} placeholder="Jalan Barat, Bukit Jalil, 57000 Kuala Lumpur" /></label>
     <label>{t("admin.ev.start")}<input type="datetime-local" name="start" required defaultValue={item ? malaysiaLocal(item.starts_at) : undefined} /></label>
     <label>{t("admin.ev.description")}<textarea name="description" required minLength={10} maxLength={1500} defaultValue={item?.description} /></label>
-    <label>{t("admin.ev.policy")}<input name="policy" type="url" required maxLength={1500} defaultValue={item?.transfer_policy_url ?? undefined} /></label>
-    <label>{t("admin.ev.transfer")}<input name="transfer site" type="url" required maxLength={1500} defaultValue={item?.transfer_host ? `https://${item.transfer_host}` : undefined} /></label>
+    <label>{t("admin.ev.policy")}<input name="policy" inputMode="url" autoCapitalize="off" maxLength={1500} defaultValue={item?.transfer_policy_url ?? undefined} /></label>
+    <label>{t("admin.ev.transfer")}<input name="transfer site" inputMode="url" autoCapitalize="off" maxLength={1500} defaultValue={item?.transfer_host ? `https://${item.transfer_host}` : undefined} /></label>
+    <small>{t("admin.ev.linksOptional")}</small>
     <div className="form-columns">
       <ImageField name="poster" label={t("admin.ev.poster")} hint={t("admin.ev.posterHint")} preview={item ? posterUrl(item) : null} />
       <ImageField name="seatmap" label={t("admin.ev.seatmap")} hint={t("admin.ev.seatmapHint")} preview={item?.seatmap_id ? mediaUrl(item.seatmap_id, item.seatmap_remote) : null} />

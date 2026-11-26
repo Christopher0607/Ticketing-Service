@@ -233,3 +233,35 @@ test("company details stay hidden until the admin fills them in", async ({ brows
     await admin.context().close();
   }
 });
+
+test("event links are optional: empty, 无, or a bare domain", async ({ browser, baseURL }) => {
+  const admin = await signedIn(browser, baseURL, "admin@example.test");
+  const db = new pg.Client({ connectionString: dbUrl });
+  await db.connect();
+  const titles = [`Optional Links A ${Date.now()}`, `Optional Links B ${Date.now()}`];
+  const create = async (title: string, policy: string, site: string) => {
+    await admin.goto("/admin/events/new");
+    await admin.getByLabel("Event name").fill(title);
+    await admin.getByLabel("Venue", { exact: true }).fill("Test Hall");
+    await admin.getByLabel("City").fill("Kuala Lumpur");
+    await admin.getByLabel("Start (Malaysia time)").fill(new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 16));
+    await admin.getByLabel("Description").fill("Optional links fixture.");
+    await admin.getByLabel("Official resale policy URL").fill(policy);
+    await admin.getByLabel("Official transfer site").fill(site);
+    await admin.getByRole("button", { name: "Publish event" }).click();
+    await expect(admin.getByText("Event published.")).toBeVisible();
+  };
+  try {
+    await create(titles[0], "无", "");
+    await create(titles[1], "www.example.com/resale", "tickets.example.com");
+    const rows = (await db.query("SELECT title,transfer_policy_url,transfer_host FROM events WHERE title=ANY($1) ORDER BY title", [titles])).rows;
+    expect(rows).toEqual([
+      { title: titles[0], transfer_policy_url: null, transfer_host: null },
+      { title: titles[1], transfer_policy_url: "https://www.example.com/resale", transfer_host: "tickets.example.com" },
+    ]);
+  } finally {
+    await db.query("DELETE FROM events WHERE title=ANY($1)", [titles]);
+    await db.end();
+    await admin.context().close();
+  }
+});
